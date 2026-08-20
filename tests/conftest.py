@@ -1,0 +1,73 @@
+"""Shared pytest fixtures with an isolated SQLite database."""
+
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.database import Base, get_db
+from app.embeddings.factory import get_embedding_provider, set_embedding_provider_override
+from app.embeddings.fake import FakeEmbeddingProvider
+from app.main import create_app
+from app.models import Event, Memory, MemoryEmbedding  # noqa: F401 — register metadata
+
+
+@pytest.fixture()
+def fake_provider() -> FakeEmbeddingProvider:
+    return FakeEmbeddingProvider()
+
+
+@pytest.fixture()
+def engine():
+    """In-memory SQLite engine shared across connections in a test."""
+    eng = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+
+    @event.listens_for(eng, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record) -> None:  # noqa: ARG001
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    Base.metadata.create_all(bind=eng)
+    yield eng
+    Base.metadata.drop_all(bind=eng)
+    eng.dispose()
+
+
+@pytest.fixture()
+def db_session(engine) -> Session:
+    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture()
+def client(engine, fake_provider) -> TestClient:
+    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    app = create_app()
+    set_embedding_provider_override(fake_provider)
+
+    def _override_get_db():
+        session = TestingSessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_embedding_provider] = lambda: fake_provider
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+    set_embedding_provider_override(None)
