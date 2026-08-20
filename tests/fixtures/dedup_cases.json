@@ -1,0 +1,259 @@
+[
+  {
+    "id": "exact_ragparser",
+    "existing": "User is building RagParser.",
+    "candidate": "User is building RagParser.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "normalized_python",
+    "existing": "User prefers Python.",
+    "candidate": " user   prefers   python. ",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "paraphrase_ragparser",
+    "existing": "User is building RagParser.",
+    "candidate": "RagParser is a project the user is currently working on.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "paraphrase_working_on",
+    "existing": "User is building Munin.",
+    "candidate": "User is working on Munin.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "reinforce_python_backend",
+    "existing": "User prefers Python for backend work.",
+    "candidate": "Python is still the user's default backend language.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "reinforce_remains",
+    "existing": "User prefers Python for backend development.",
+    "candidate": "Python remains my default backend language.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "related_but_new_fastapi",
+    "existing": "User is building Munin.",
+    "candidate": "Munin uses FastAPI.",
+    "existing_type": "project",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "related_but_new_sqlite",
+    "existing": "User is building Munin.",
+    "candidate": "Munin uses SQLite for persistence.",
+    "existing_type": "project",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "opposite_prefer",
+    "existing": "User prefers Python.",
+    "candidate": "User does not prefer Python.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "opposite_anymore",
+    "existing": "User prefers Python.",
+    "candidate": "I do not prefer Python anymore.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "type_project_vs_goal",
+    "existing": "User is building Munin.",
+    "candidate": "User wants to finish Munin this month.",
+    "existing_type": "project",
+    "candidate_type": "goal",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "type_preference_vs_decision",
+    "existing": "User prefers SQLite.",
+    "candidate": "We decided to use SQLite for Munin M0.",
+    "existing_type": "preference",
+    "candidate_type": "decision",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "unrelated_topics",
+    "existing": "User is building RagParser.",
+    "candidate": "User prefers dark mode.",
+    "existing_type": "project",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "paraphrase_pdf_parser",
+    "existing": "User is building a PDF parsing engine.",
+    "candidate": "User is working on a PDF document parser.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "new_agent_detail",
+    "existing": "User is building Munin.",
+    "candidate": "Munin stores durable agent memory.",
+    "existing_type": "project",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "exact_preference",
+    "existing": "User prefers Python for backend development.",
+    "candidate": "User prefers Python for backend development.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "normalized_whitespace_project",
+    "existing": "User is building Munin.",
+    "candidate": "  User   is   building   Munin.  ",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "reinforce_still_working",
+    "existing": "User prefers concise answers.",
+    "candidate": "Concise answers are still my preference.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "opposite_never",
+    "existing": "User prefers TypeScript.",
+    "candidate": "User never prefers TypeScript.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "goal_vs_project_finish",
+    "existing": "User is building RagParser.",
+    "candidate": "My goal is to finish RagParser.",
+    "existing_type": "project",
+    "candidate_type": "goal",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "new_stack_fact",
+    "existing": "User prefers Python.",
+    "candidate": "User prefers FastAPI for APIs.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "paraphrase_decision",
+    "existing": "We decided to use SQLite for Munin.",
+    "candidate": "We decided to use SQLite for Munin.",
+    "existing_type": "decision",
+    "candidate_type": "decision",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "related_embedding_model",
+    "existing": "User is building Munin.",
+    "candidate": "Munin uses sentence-transformers for embeddings.",
+    "existing_type": "project",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "casefold_duplicate",
+    "existing": "User Prefers Python.",
+    "candidate": "user prefers python.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "reinforce_as_always",
+    "existing": "User prefers keyboard shortcuts.",
+    "candidate": "Keyboard shortcuts remain my default preference as always.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "new_unrelated_preference",
+    "existing": "User is building RagParser.",
+    "candidate": "User prefers Vim keybindings.",
+    "existing_type": "project",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "paraphrase_building_developing",
+    "existing": "User is building an agent memory layer.",
+    "candidate": "User is developing an agent memory layer.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "new_procedure",
+    "existing": "User prefers Python.",
+    "candidate": "To run Munin tests, use pytest.",
+    "existing_type": "preference",
+    "candidate_type": "procedure",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "opposite_dont",
+    "existing": "User prefers cloud LLMs.",
+    "candidate": "I don't prefer cloud LLMs.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "duplicate_goal_exact",
+    "existing": "User wants to publish an article about agent memory.",
+    "candidate": "User wants to publish an article about agent memory.",
+    "existing_type": "goal",
+    "candidate_type": "goal",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "new_relationship_fact",
+    "existing": "User is building Munin.",
+    "candidate": "Alice collaborates with Bob on Munin.",
+    "existing_type": "project",
+    "candidate_type": "relationship",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "namespace_isolation_note",
+    "existing": "User is building RagParser.",
+    "candidate": "User is building RagParser.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE",
+    "note": "Pairwise identical; namespace isolation is enforced by DeduplicationService scope, not the classifier."
+  }
+]

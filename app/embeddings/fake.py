@@ -45,6 +45,11 @@ class FakeEmbeddingProvider(EmbeddingProvider):
             "language": 2,
             "model": 2,
             "models": 2,
+            # Extra axes for M3 preference / stack tests (keeps dim=8).
+            "python": 3,
+            "backend": 3,
+            "fastapi": 4,
+            "sqlite": 4,
         }
 
     @property

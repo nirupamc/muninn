@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     admission_model: str = ""
     admission_api_key: str = ""
 
+    # M3 — Deduplication & Reinforcement
+    dedup_provider: str = "deterministic"
+    dedup_candidate_limit: int = 5
+    dedup_min_similarity: float = 0.55
+    dedup_relationship_min_confidence: float = 0.70
+    dedup_base_url: str = ""
+    dedup_model: str = ""
+    dedup_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

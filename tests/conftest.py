@@ -11,10 +11,22 @@ from sqlalchemy.pool import StaticPool
 from app.admission.factory import get_admission_provider, set_admission_provider_override
 from app.admission.providers.deterministic import DeterministicAdmissionProvider
 from app.database import Base, get_db
+from app.deduplication.factory import (
+    get_relationship_provider,
+    set_relationship_provider_override,
+)
+from app.deduplication.providers.deterministic import DeterministicRelationshipProvider
 from app.embeddings.factory import get_embedding_provider, set_embedding_provider_override
 from app.embeddings.fake import FakeEmbeddingProvider
 from app.main import create_app
-from app.models import Event, Memory, MemoryAdmission, MemoryEmbedding  # noqa: F401
+from app.models import (  # noqa: F401
+    Event,
+    Memory,
+    MemoryAdmission,
+    MemoryDeduplicationDecision,
+    MemoryEmbedding,
+    MemoryReinforcement,
+)
 
 
 @pytest.fixture()
@@ -25,6 +37,11 @@ def fake_provider() -> FakeEmbeddingProvider:
 @pytest.fixture()
 def admission_provider() -> DeterministicAdmissionProvider:
     return DeterministicAdmissionProvider()
+
+
+@pytest.fixture()
+def relationship_provider() -> DeterministicRelationshipProvider:
+    return DeterministicRelationshipProvider()
 
 
 @pytest.fixture()
@@ -60,11 +77,12 @@ def db_session(engine) -> Session:
 
 
 @pytest.fixture()
-def client(engine, fake_provider, admission_provider) -> TestClient:
+def client(engine, fake_provider, admission_provider, relationship_provider) -> TestClient:
     TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     app = create_app()
     set_embedding_provider_override(fake_provider)
     set_admission_provider_override(admission_provider)
+    set_relationship_provider_override(relationship_provider)
 
     def _override_get_db():
         session = TestingSessionLocal()
@@ -76,8 +94,10 @@ def client(engine, fake_provider, admission_provider) -> TestClient:
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_embedding_provider] = lambda: fake_provider
     app.dependency_overrides[get_admission_provider] = lambda: admission_provider
+    app.dependency_overrides[get_relationship_provider] = lambda: relationship_provider
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     set_embedding_provider_override(None)
     set_admission_provider_override(None)
+    set_relationship_provider_override(None)

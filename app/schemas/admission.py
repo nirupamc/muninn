@@ -10,6 +10,17 @@ from app.models.event import EventRole
 from app.models.memory import MemoryType
 
 
+class DeduplicationOutcomeRead(BaseModel):
+    """Deduplication outcome attached to a STORE-worthy admission result."""
+
+    relationship: str
+    matched_memory_id: str | None = None
+    created_new_memory: bool
+    relationship_confidence: float | None = None
+    similarity_score: float | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+
+
 class AdmitEventResultItem(BaseModel):
     """One admission result for an event."""
 
@@ -26,6 +37,7 @@ class AdmitEventResultItem(BaseModel):
     explicitness: float | None = None
     triviality: float | None = None
     reason_codes: list[str] = Field(default_factory=list)
+    deduplication: DeduplicationOutcomeRead | None = None
 
 
 class AdmitEventResponse(BaseModel):
@@ -101,3 +113,24 @@ class AnalyzeAdmissionResponse(BaseModel):
     results: list[AnalyzeAdmissionCandidate]
     provider: str
     model_name: str
+
+
+class DeduplicationRecordRead(BaseModel):
+    """Persisted deduplication audit row (safe for API)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    admission_id: str | None
+    candidate_content: str
+    candidate_memory_type: str
+    matched_memory_id: str | None
+    relationship: str
+    relationship_confidence: float
+    similarity_score: float | None
+    reason_codes: list[str]
+    created_memory_id: str | None
+    provider: str
+    model_name: str
+    created_at: datetime

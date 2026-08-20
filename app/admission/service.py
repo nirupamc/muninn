@@ -14,9 +14,13 @@ from app.admission.models import ReasonCode
 from app.admission.privacy import REDACTED_PLACEHOLDER, contains_secret_like_data, redact_if_sensitive
 from app.admission.rules import AdmissionPolicyConfig, PolicyDecision, apply_admission_policy
 from app.config import get_settings
+from app.deduplication.base import RelationshipProvider
+from app.deduplication.factory import get_relationship_provider
+from app.deduplication.service import DeduplicationService
 from app.embeddings.base import EmbeddingProvider
 from app.models.admission import MemoryAdmission
-from app.models.event import Event
+from app.models.deduplication import MemoryDeduplicationDecision
+from app.models.memory import MemoryType
 from app.repositories.admission_repository import AdmissionRepository
 from app.repositories.event_repository import EventRepository
 from app.schemas.admission import (
@@ -25,15 +29,14 @@ from app.schemas.admission import (
     AnalyzeAdmissionCandidate,
     AnalyzeAdmissionRequest,
     AnalyzeAdmissionResponse,
+    DeduplicationOutcomeRead,
 )
-from app.schemas.memory import MemoryCreate
-from app.services.memory_service import MemoryService
 
 logger = logging.getLogger("munin.admission")
 
 
 class AdmissionService:
-    """Orchestrates event → candidates → policy → audit → memory."""
+    """Orchestrates event → candidates → policy → audit → dedup → memory."""
 
     def __init__(
         self,
@@ -41,12 +44,17 @@ class AdmissionService:
         *,
         admission_provider: AdmissionProvider | None = None,
         embedding_provider: EmbeddingProvider | None = None,
+        relationship_provider: RelationshipProvider | None = None,
     ) -> None:
         self.db = db
         self.event_repo = EventRepository(db)
         self.admission_repo = AdmissionRepository(db)
         self.admission_provider = admission_provider or get_admission_provider()
-        self.memory_service = MemoryService(db, embedding_provider=embedding_provider)
+        self.dedup_service = DeduplicationService(
+            db,
+            relationship_provider=relationship_provider,
+            embedding_provider=embedding_provider,
+        )
         settings = get_settings()
         self.policy = AdmissionPolicyConfig(
             store_threshold=settings.admission_store_threshold,
@@ -63,7 +71,13 @@ class AdmissionService:
 
         existing = self.admission_repo.list_by_event_id(event_id)
         if existing:
-            return self._response_from_audits(event_id, existing, idempotent_replay=True)
+            dedup_rows = self.dedup_service.list_decisions_for_event(event_id)
+            return self._response_from_audits(
+                event_id,
+                existing,
+                dedup_rows,
+                idempotent_replay=True,
+            )
 
         started = time.perf_counter()
         try:
@@ -88,19 +102,16 @@ class AdmissionService:
                 detail="Admission provider unavailable",
             ) from exc
 
-        # Whole-event privacy short-circuit: still record a single redacted IGNORE audit.
         if contains_secret_like_data(event.content).is_sensitive and not analysis.candidates:
             analysis_candidates = []
         else:
             analysis_candidates = analysis.candidates
 
-        # If event is secret-like and provider somehow returned candidates, policy will redact.
         if contains_secret_like_data(event.content).is_sensitive and not analysis_candidates:
             from app.admission.models import (
                 AdmissionCandidate,
                 CandidateAnalysis,
             )
-            from app.models.memory import MemoryType
 
             analysis_candidates = [
                 CandidateAnalysis(
@@ -133,31 +144,19 @@ class AdmissionService:
         try:
             audits: list[MemoryAdmission] = []
             results: list[AdmitEventResultItem] = []
+            dedup_by_admission: dict[str, DeduplicationOutcomeRead] = {}
 
             for decision in decisions:
                 memory_id: str | None = None
-                if decision.decision == "STORE":
-                    memory = self.memory_service.create(
-                        MemoryCreate(
-                            namespace=event.namespace,
-                            user_id=event.user_id,
-                            agent_id=event.agent_id,
-                            content=decision.candidate.content,
-                            memory_type=decision.candidate.memory_type,
-                            importance=decision.candidate.importance,
-                            confidence=decision.candidate.confidence,
-                            source_event_id=event.id,
-                            metadata={"admitted_from_event": True},
-                        ),
-                        commit=False,
-                    )
-                    memory_id = memory.id
+                dedup_outcome: DeduplicationOutcomeRead | None = None
 
                 safe_content = (
                     REDACTED_PLACEHOLDER
                     if decision.redacted
                     else decision.candidate.content
                 )
+
+                # Persist admission audit first (STORE remains STORE even if later deduped).
                 audit = MemoryAdmission(
                     event_id=event.id,
                     candidate_content=safe_content,
@@ -172,11 +171,37 @@ class AdmissionService:
                     explicitness=decision.candidate.explicitness,
                     triviality=decision.candidate.triviality,
                     reason_codes=[c.value for c in decision.reason_codes],
-                    created_memory_id=memory_id,
+                    created_memory_id=None,
                     provider=self.admission_provider.provider_name,
                     model_name=self.admission_provider.model_name,
                 )
                 self.admission_repo.create(audit, commit=False)
+
+                if decision.decision == "STORE" and not decision.redacted:
+                    dedup_result = self.dedup_service.process_candidate(
+                        event=event,
+                        admission_id=audit.id,
+                        content=decision.candidate.content,
+                        memory_type=decision.candidate.memory_type,
+                        importance=decision.candidate.importance,
+                        confidence=decision.candidate.confidence,
+                        create_memory=True,
+                    )
+                    memory_id = dedup_result.created_memory_id
+                    audit.created_memory_id = memory_id
+                    self.db.add(audit)
+                    self.db.flush()
+
+                    dedup_outcome = DeduplicationOutcomeRead(
+                        relationship=dedup_result.relationship.value,
+                        matched_memory_id=dedup_result.matched_memory_id,
+                        created_new_memory=dedup_result.created_new_memory,
+                        relationship_confidence=dedup_result.confidence,
+                        similarity_score=dedup_result.similarity_score,
+                        reason_codes=list(dedup_result.reason_codes),
+                    )
+                    dedup_by_admission[audit.id] = dedup_outcome
+
                 audits.append(audit)
                 results.append(
                     AdmitEventResultItem(
@@ -193,11 +218,10 @@ class AdmissionService:
                         explicitness=decision.candidate.explicitness,
                         triviality=decision.candidate.triviality,
                         reason_codes=[c.value for c in decision.reason_codes],
+                        deduplication=dedup_outcome,
                     )
                 )
 
-            # Empty analysis → still mark event admitted with zero results? Spec wants
-            # idempotency; store a sentinel IGNORE so replay works.
             if not decisions:
                 audit = MemoryAdmission(
                     event_id=event.id,
@@ -235,15 +259,22 @@ class AdmissionService:
             self.db.rollback()
             raise
 
+        # "stored" = admission STORE decisions (M2 meaning). Dedup may not create a row.
         stored = sum(1 for r in results if r.decision == "STORE")
         ignored = sum(1 for r in results if r.decision == "IGNORE")
+        created = sum(
+            1
+            for r in results
+            if r.deduplication is not None and r.deduplication.created_new_memory
+        )
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         logger.info(
-            "Admitted event_id=%s candidates=%s stored=%s ignored=%s "
-            "provider=%s model=%s duration_ms=%s",
+            "Admitted event_id=%s candidates=%s store_worthy=%s created_memories=%s "
+            "ignored=%s provider=%s model=%s duration_ms=%s",
             event_id,
             len(results),
             stored,
+            created,
             ignored,
             self.admission_provider.provider_name,
             self.admission_provider.model_name,
@@ -266,6 +297,15 @@ class AdmissionService:
                 detail=f"Event '{event_id}' not found",
             )
         return self.admission_repo.list_by_event_id(event_id)
+
+    def list_deduplication(self, event_id: str) -> list[MemoryDeduplicationDecision]:
+        event = self.event_repo.get_by_id(event_id)
+        if event is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Event '{event_id}' not found",
+            )
+        return self.dedup_service.list_decisions_for_event(event_id)
 
     def analyze_only(self, payload: AnalyzeAdmissionRequest) -> AnalyzeAdmissionResponse:
         """Debug analysis — no persistence, no memory creation."""
@@ -321,29 +361,53 @@ class AdmissionService:
         self,
         event_id: str,
         audits: list[MemoryAdmission],
+        dedup_rows: list[MemoryDeduplicationDecision],
         *,
         idempotent_replay: bool,
     ) -> AdmitEventResponse:
-        results = [
-            AdmitEventResultItem(
-                decision=row.decision,
-                memory_id=row.created_memory_id,
-                memory_type=row.memory_type,
-                content=redact_if_sensitive(row.candidate_content)
-                if row.candidate_content
-                else row.candidate_content,
-                admission_score=row.admission_score,
-                importance=row.importance,
-                confidence=row.confidence,
-                future_utility=row.future_utility,
-                stability=row.stability,
-                specificity=row.specificity,
-                explicitness=row.explicitness,
-                triviality=row.triviality,
-                reason_codes=list(row.reason_codes or []),
+        dedup_by_admission = {row.admission_id: row for row in dedup_rows if row.admission_id}
+        # Fallback: match by order for legacy rows without admission_id linkage.
+        unmatched_dedup = [row for row in dedup_rows if not row.admission_id]
+        unmatched_idx = 0
+
+        results: list[AdmitEventResultItem] = []
+        for row in audits:
+            dedup_outcome: DeduplicationOutcomeRead | None = None
+            dedup_row = dedup_by_admission.get(row.id)
+            if dedup_row is None and row.decision == "STORE" and unmatched_idx < len(unmatched_dedup):
+                dedup_row = unmatched_dedup[unmatched_idx]
+                unmatched_idx += 1
+            if dedup_row is not None:
+                dedup_outcome = DeduplicationOutcomeRead(
+                    relationship=dedup_row.relationship,
+                    matched_memory_id=dedup_row.matched_memory_id,
+                    created_new_memory=dedup_row.created_memory_id is not None,
+                    relationship_confidence=dedup_row.relationship_confidence,
+                    similarity_score=dedup_row.similarity_score,
+                    reason_codes=list(dedup_row.reason_codes or []),
+                )
+
+            results.append(
+                AdmitEventResultItem(
+                    decision=row.decision,
+                    memory_id=row.created_memory_id,
+                    memory_type=row.memory_type,
+                    content=redact_if_sensitive(row.candidate_content)
+                    if row.candidate_content
+                    else row.candidate_content,
+                    admission_score=row.admission_score,
+                    importance=row.importance,
+                    confidence=row.confidence,
+                    future_utility=row.future_utility,
+                    stability=row.stability,
+                    specificity=row.specificity,
+                    explicitness=row.explicitness,
+                    triviality=row.triviality,
+                    reason_codes=list(row.reason_codes or []),
+                    deduplication=dedup_outcome,
+                )
             )
-            for row in audits
-        ]
+
         return AdmitEventResponse(
             event_id=event_id,
             processed=len(results),
