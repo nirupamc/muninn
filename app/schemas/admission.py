@@ -21,6 +21,18 @@ class DeduplicationOutcomeRead(BaseModel):
     reason_codes: list[str] = Field(default_factory=list)
 
 
+class TemporalOutcomeRead(BaseModel):
+    """Temporal outcome for an M3-NEW candidate."""
+
+    relationship: str
+    matched_memory_id: str | None = None
+    created_memory_id: str | None = None
+    old_memory_status: str | None = None
+    relationship_confidence: float | None = None
+    similarity_score: float | None = None
+    reason_codes: list[str] = Field(default_factory=list)
+
+
 class AdmitEventResultItem(BaseModel):
     """One admission result for an event."""
 
@@ -38,6 +50,7 @@ class AdmitEventResultItem(BaseModel):
     triviality: float | None = None
     reason_codes: list[str] = Field(default_factory=list)
     deduplication: DeduplicationOutcomeRead | None = None
+    temporal: TemporalOutcomeRead | None = None
 
 
 class AdmitEventResponse(BaseModel):
@@ -134,3 +147,37 @@ class DeduplicationRecordRead(BaseModel):
     provider: str
     model_name: str
     created_at: datetime
+
+
+class TemporalRecordRead(BaseModel):
+    """Persisted temporal audit row (safe for API)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_id: str
+    admission_id: str | None
+    dedup_decision_id: str | None
+    candidate_content: str
+    candidate_memory_type: str
+    matched_memory_id: str | None
+    created_memory_id: str | None
+    relationship: str
+    relationship_confidence: float
+    similarity_score: float | None
+    reason_codes: list[str]
+    old_status: str | None
+    new_old_status: str | None
+    old_valid_until_before: datetime | None
+    old_valid_until_after: datetime | None
+    new_valid_from: datetime | None
+    provider: str
+    model_name: str
+    created_at: datetime
+
+
+class MemoryHistoryResponse(BaseModel):
+    """Temporal decision history for one memory."""
+
+    memory_id: str
+    temporal_decisions: list[TemporalRecordRead] = Field(default_factory=list)

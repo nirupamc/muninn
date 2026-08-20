@@ -44,6 +44,7 @@ class DeduplicationResult:
     similarity_score: float | None
     reason_codes: list[str]
     explanation: str | None = None
+    decision_id: str | None = None
 
 
 class DeduplicationService:
@@ -438,7 +439,9 @@ class DeduplicationService:
             provider=self.relationship_provider.provider_name,
             model_name=self.relationship_provider.model_name,
         )
-        return self.repo.create_decision(row, commit=False)
+        created = self.repo.create_decision(row, commit=False)
+        result.decision_id = created.id
+        return created
 
     def _log_decision(
         self,

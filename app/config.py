@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     dedup_model: str = ""
     dedup_api_key: str = ""
 
+    # M4 — Contradiction + Temporal Memory
+    temporal_provider: str = "deterministic"
+    temporal_candidate_limit: int = 5
+    temporal_min_similarity: float = 0.50
+    temporal_relationship_min_confidence: float = 0.75
+    temporal_base_url: str = ""
+    temporal_model: str = ""
+    temporal_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

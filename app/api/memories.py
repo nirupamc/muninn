@@ -7,6 +7,7 @@ from app.database import get_db
 from app.embeddings.base import EmbeddingProvider
 from app.embeddings.factory import get_embedding_provider
 from app.models.memory import MemoryStatus, MemoryType
+from app.schemas.admission import MemoryHistoryResponse, TemporalRecordRead
 from app.schemas.memory import (
     MemoryCreate,
     MemoryRead,
@@ -15,6 +16,7 @@ from app.schemas.memory import (
     MemoryUpdate,
 )
 from app.services.memory_service import MemoryService
+from app.temporal.service import TemporalService
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 
@@ -68,6 +70,22 @@ def list_memories(
         offset=offset,
     )
     return [_to_read(memory) for memory in memories]
+
+
+@router.get("/{memory_id}/history", response_model=MemoryHistoryResponse)
+def memory_history(
+    memory_id: str,
+    db: Session = Depends(get_db),
+    provider: EmbeddingProvider = Depends(get_embedding_provider),
+) -> MemoryHistoryResponse:
+    memory_service = MemoryService(db, embedding_provider=provider)
+    memory_service.get(memory_id)
+    temporal = TemporalService(db, embedding_provider=provider)
+    rows = temporal.history_for_memory(memory_id)
+    return MemoryHistoryResponse(
+        memory_id=memory_id,
+        temporal_decisions=[TemporalRecordRead.model_validate(row) for row in rows],
+    )
 
 
 @router.get("/{memory_id}", response_model=MemoryRead)

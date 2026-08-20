@@ -34,6 +34,15 @@ _EPHEMERAL = re.compile(
     r"right\s+now|currently\s+on)\b"
 )
 _DEBUGGING = re.compile(r"(?i)\b(?:debugging|fixing)\b")
+_SWITCHED = re.compile(
+    r"(?i)\b(?:switched|migrated|moved\s+from|replaced)\b"
+)
+_NO_LONGER_USE = re.compile(
+    r"(?i)\b(?:no\s+longer\s+use[sd]?|stopped\s+using|do\s+not\s+use|don't\s+use)\b"
+)
+_STILL_USE = re.compile(r"(?i)\bstill\s+use[sd]?\b")
+_I_USE = re.compile(r"(?i)\b(?:i\s+use|i(?:'m| am)\s+using)\b|\bi\s+used\b(?!\s+to\b)")
+_KNOWN_PROJECTS = ("RagParser", "Munin")
 
 
 class DeterministicAdmissionProvider(AdmissionProvider):
@@ -217,7 +226,87 @@ class DeterministicAdmissionProvider(AdmissionProvider):
                 explanation="Ongoing project statement",
             )
 
-        # Stable preference
+        # Tool / stack migration: "switched from X to Y"
+        switched = _normalize_switch(clause)
+        if switched is not None:
+            return CandidateAnalysis(
+                candidate=AdmissionCandidate(
+                    content=switched,
+                    memory_type=MemoryType.fact,
+                    importance=0.88,
+                    confidence=0.95,
+                    future_utility=0.9,
+                    stability=0.75,
+                    specificity=0.9,
+                    explicitness=0.95,
+                    triviality=0.05,
+                ),
+                provider_recommendation="STORE",
+                reason_codes=[ReasonCode.SPECIFIC_FACT, ReasonCode.HIGH_FUTURE_UTILITY],
+                explanation="Explicit tool/stack migration",
+            )
+
+        # No longer / stopped using
+        no_longer = _normalize_no_longer_use(clause)
+        if no_longer is not None:
+            return CandidateAnalysis(
+                candidate=AdmissionCandidate(
+                    content=no_longer,
+                    memory_type=MemoryType.fact,
+                    importance=0.85,
+                    confidence=0.95,
+                    future_utility=0.85,
+                    stability=0.8,
+                    specificity=0.9,
+                    explicitness=0.95,
+                    triviality=0.05,
+                ),
+                provider_recommendation="STORE",
+                reason_codes=[ReasonCode.SPECIFIC_FACT, ReasonCode.EXPLICIT_USER_STATEMENT],
+                explanation="Explicit discontinued usage",
+            )
+
+        # Still uses (durable confirmation)
+        still_use = _normalize_still_use(clause)
+        if still_use is not None:
+            return CandidateAnalysis(
+                candidate=AdmissionCandidate(
+                    content=still_use,
+                    memory_type=MemoryType.fact,
+                    importance=0.8,
+                    confidence=0.95,
+                    future_utility=0.8,
+                    stability=0.85,
+                    specificity=0.85,
+                    explicitness=0.9,
+                    triviality=0.05,
+                ),
+                provider_recommendation="STORE",
+                reason_codes=[ReasonCode.SPECIFIC_FACT, ReasonCode.EXPLICIT_USER_STATEMENT],
+                explanation="Ongoing usage confirmation",
+            )
+
+        # Direct usage: "I use SQLite for Munin"
+        direct_use = _normalize_direct_use(clause, original=original)
+        if direct_use is not None:
+            return CandidateAnalysis(
+                candidate=AdmissionCandidate(
+                    content=direct_use,
+                    memory_type=MemoryType.fact,
+                    importance=0.82,
+                    confidence=0.92,
+                    future_utility=0.8,
+                    stability=0.7,
+                    specificity=0.85,
+                    explicitness=0.9,
+                    triviality=0.05,
+                ),
+                provider_recommendation="STORE",
+                reason_codes=[ReasonCode.SPECIFIC_FACT, ReasonCode.HIGH_FUTURE_UTILITY],
+                explanation="Explicit tool usage",
+            )
+
+        # Stable preference (preserves negation / temporal modifiers)
         if _PREFER.search(clause):
             content = _normalize_preference(clause)
             reasons = [ReasonCode.STABLE_PREFERENCE, ReasonCode.EXPLICIT_USER_STATEMENT]
@@ -381,7 +470,27 @@ def _extract_project_name(clause: str) -> str | None:
         r"(?i)\b(?:building|working on|developing)\s+([A-Za-z][\w\-]*)",
         clause,
     )
-    return m.group(1) if m else None
+    if m:
+        name = m.group(1)
+        # Avoid capturing filler when the real project name appears earlier.
+        if name.lower() not in {"a", "an", "the", "my", "our"}:
+            return name
+
+    for known in _KNOWN_PROJECTS:
+        if re.search(rf"(?i)\b{re.escape(known)}\b", clause):
+            return known
+
+    # Leading CamelCase / proper-ish token: "RagParser is the document parser..."
+    leading = re.match(r"^([A-Z][A-Za-z0-9_\-]{1,40})\b", clause.strip())
+    if leading:
+        return leading.group(1)
+
+    # Any CamelCase token in the clause
+    camel = re.search(r"\b([A-Z][a-z]+[A-Z][A-Za-z0-9]*)\b", clause)
+    if camel:
+        return camel.group(1)
+
+    return None
 
 
 def _extract_project_details(clause: str) -> str:
@@ -399,22 +508,116 @@ def _extract_project_details(clause: str) -> str:
 
 def _extract_named_tool(clause: str) -> str | None:
     m = re.search(r"(?i)\b([A-Za-z][\w\.]{1,40})\b(?:\s+all\s+week)?\s*$", clause)
-    # Prefer known frameworks in the clause
     for name in ("FastAPI", "Django", "Flask", "React", "Munin", "RagParser"):
         if re.search(rf"(?i)\b{re.escape(name)}\b", clause):
             return name
     return m.group(1) if m else None
 
 
+def _strip_trailing_anymore(text: str) -> str:
+    return re.sub(r"(?i)\s+anymore\.?$", "", text.strip()).strip(" .,")
+
+
 def _normalize_preference(clause: str) -> str:
+    """Preserve negation and temporal modifiers; never invert polarity."""
+    cleaned = _REMEMBER.sub("", clause).strip()
+
+    m = re.search(r"(?i)\bused\s+to\s+prefer\s+(.+)$", cleaned)
+    if m:
+        rest = _strip_trailing_anymore(m.group(1))
+        return f"User used to prefer {rest}."
+
+    m = re.search(r"(?i)\b(?:now|currently)\s+prefer(?:s)?\s+(.+)$", cleaned)
+    if m:
+        rest = _strip_trailing_anymore(m.group(1))
+        return f"User now prefers {rest}."
+
+    m = re.search(r"(?i)\bstill\s+prefer(?:s)?\s+(.+)$", cleaned)
+    if m:
+        rest = _strip_trailing_anymore(m.group(1))
+        return f"User still prefers {rest}."
+
     m = re.search(
-        r"(?i)\b(?:prefer|preferred)\s+(.+)$",
-        _REMEMBER.sub("", clause).strip(),
+        r"(?i)\b(?:do\s+not|don't|does\s+not|doesn't|no\s+longer|never)\s+prefer\s+(.+)$",
+        cleaned,
     )
     if m:
-        rest = m.group(1).strip().rstrip(".")
+        rest = _strip_trailing_anymore(m.group(1))
+        return f"User does not prefer {rest}."
+
+    m = re.search(
+        r"(?i)\b(?:prefer|preferred)\s+(.+)$",
+        cleaned,
+    )
+    if m:
+        rest = _strip_trailing_anymore(m.group(1))
         return f"User prefers {rest}."
     return _normalize_statement(clause, prefix="User")
+
+
+def _normalize_switch(clause: str) -> str | None:
+    if not _SWITCHED.search(clause):
+        return None
+    m = re.search(
+        r"(?i)\b(?:switched|migrated|moved)\s+(?:(?:\w+)\s+)?from\s+(.+?)\s+to\s+(.+)$",
+        clause,
+    )
+    if m:
+        old = m.group(1).strip().rstrip(".")
+        new = m.group(2).strip().rstrip(".")
+        subject = "Munin" if re.search(r"(?i)\bmunin\b", clause) else "User"
+        return f"{subject} switched from {old} to {new}."
+    m = re.search(r"(?i)\breplaced\s+(.+?)\s+with\s+(.+)$", clause)
+    if m:
+        return (
+            f"User replaced {m.group(1).strip().rstrip('.')} "
+            f"with {m.group(2).strip().rstrip('.')}."
+        )
+    return None
+
+
+def _normalize_no_longer_use(clause: str) -> str | None:
+    if not _NO_LONGER_USE.search(clause):
+        return None
+    m = re.search(
+        r"(?i)\b(?:no\s+longer\s+use[sd]?|stopped\s+using|do\s+not\s+use|don't\s+use)\s+(.+)$",
+        clause,
+    )
+    if not m:
+        return None
+    rest = _strip_trailing_anymore(m.group(1))
+    return f"User no longer uses {rest}."
+
+
+def _normalize_still_use(clause: str) -> str | None:
+    if not _STILL_USE.search(clause):
+        return None
+    m = re.search(r"(?i)\bstill\s+use[sd]?\s+(.+)$", clause)
+    if not m:
+        return None
+    rest = m.group(1).strip().rstrip(".")
+    return f"User still uses {rest}."
+
+
+def _normalize_direct_use(clause: str, *, original: str) -> str | None:
+    if not _I_USE.search(clause):
+        return None
+    if _NO_LONGER_USE.search(clause) or _STILL_USE.search(clause):
+        return None
+    # Prefer / preference statements are handled separately (preserve polarity).
+    if _PREFER.search(clause) or re.search(r"(?i)\bused\s+to\s+prefer\b", clause):
+        return None
+    m = re.search(r"(?i)\b(?:i\s+use|i(?:'m| am)\s+using|i\s+used)\s+(.+)$", clause)
+    if not m:
+        return None
+    rest = m.group(1).strip().rstrip(".")
+    # Skip ephemeral "I used Python today" style unless tech marker present.
+    if re.search(r"(?i)\b(today|right\s+now|this\s+morning)\b", clause):
+        return None
+    subject = "Munin" if re.search(r"(?i)\bmunin\b", original + " " + clause) else "User"
+    if subject == "Munin":
+        return f"Munin uses {rest}."
+    return f"User uses {rest}."
 
 
 def _normalize_goal(clause: str) -> str:

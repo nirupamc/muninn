@@ -16,11 +16,13 @@ from app.admission.rules import AdmissionPolicyConfig, PolicyDecision, apply_adm
 from app.config import get_settings
 from app.deduplication.base import RelationshipProvider
 from app.deduplication.factory import get_relationship_provider
+from app.deduplication.models import RelationshipType
 from app.deduplication.service import DeduplicationService
 from app.embeddings.base import EmbeddingProvider
 from app.models.admission import MemoryAdmission
 from app.models.deduplication import MemoryDeduplicationDecision
 from app.models.memory import MemoryType
+from app.models.temporal import MemoryTemporalDecision
 from app.repositories.admission_repository import AdmissionRepository
 from app.repositories.event_repository import EventRepository
 from app.schemas.admission import (
@@ -30,7 +32,9 @@ from app.schemas.admission import (
     AnalyzeAdmissionRequest,
     AnalyzeAdmissionResponse,
     DeduplicationOutcomeRead,
+    TemporalOutcomeRead,
 )
+from app.temporal.service import TemporalService
 
 logger = logging.getLogger("munin.admission")
 
@@ -55,6 +59,10 @@ class AdmissionService:
             relationship_provider=relationship_provider,
             embedding_provider=embedding_provider,
         )
+        self.temporal_service = TemporalService(
+            db,
+            embedding_provider=embedding_provider,
+        )
         settings = get_settings()
         self.policy = AdmissionPolicyConfig(
             store_threshold=settings.admission_store_threshold,
@@ -72,10 +80,12 @@ class AdmissionService:
         existing = self.admission_repo.list_by_event_id(event_id)
         if existing:
             dedup_rows = self.dedup_service.list_decisions_for_event(event_id)
+            temporal_rows = self.temporal_service.list_for_event(event_id)
             return self._response_from_audits(
                 event_id,
                 existing,
                 dedup_rows,
+                temporal_rows,
                 idempotent_replay=True,
             )
 
@@ -149,6 +159,7 @@ class AdmissionService:
             for decision in decisions:
                 memory_id: str | None = None
                 dedup_outcome: DeduplicationOutcomeRead | None = None
+                temporal_outcome: TemporalOutcomeRead | None = None
 
                 safe_content = (
                     REDACTED_PLACEHOLDER
@@ -202,6 +213,28 @@ class AdmissionService:
                     )
                     dedup_by_admission[audit.id] = dedup_outcome
 
+                    if (
+                        dedup_result.relationship == RelationshipType.NEW
+                        and dedup_result.created_memory_id
+                    ):
+                        temporal_result = self.temporal_service.process_new_candidate(
+                            event=event,
+                            admission_id=audit.id,
+                            dedup_decision_id=dedup_result.decision_id,
+                            content=decision.candidate.content,
+                            memory_type=decision.candidate.memory_type,
+                            created_memory_id=dedup_result.created_memory_id,
+                        )
+                        temporal_outcome = TemporalOutcomeRead(
+                            relationship=temporal_result.relationship.value,
+                            matched_memory_id=temporal_result.matched_memory_id,
+                            created_memory_id=temporal_result.created_memory_id,
+                            old_memory_status=temporal_result.old_memory_status,
+                            relationship_confidence=temporal_result.confidence,
+                            similarity_score=temporal_result.similarity_score,
+                            reason_codes=list(temporal_result.reason_codes),
+                        )
+
                 audits.append(audit)
                 results.append(
                     AdmitEventResultItem(
@@ -219,6 +252,7 @@ class AdmissionService:
                         triviality=decision.candidate.triviality,
                         reason_codes=[c.value for c in decision.reason_codes],
                         deduplication=dedup_outcome,
+                        temporal=temporal_outcome,
                     )
                 )
 
@@ -307,6 +341,15 @@ class AdmissionService:
             )
         return self.dedup_service.list_decisions_for_event(event_id)
 
+    def list_temporal(self, event_id: str) -> list[MemoryTemporalDecision]:
+        event = self.event_repo.get_by_id(event_id)
+        if event is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Event '{event_id}' not found",
+            )
+        return self.temporal_service.list_for_event(event_id)
+
     def analyze_only(self, payload: AnalyzeAdmissionRequest) -> AnalyzeAdmissionResponse:
         """Debug analysis — no persistence, no memory creation."""
         try:
@@ -362,18 +405,26 @@ class AdmissionService:
         event_id: str,
         audits: list[MemoryAdmission],
         dedup_rows: list[MemoryDeduplicationDecision],
+        temporal_rows: list[MemoryTemporalDecision],
         *,
         idempotent_replay: bool,
     ) -> AdmitEventResponse:
         dedup_by_admission = {row.admission_id: row for row in dedup_rows if row.admission_id}
+        temporal_by_admission = {
+            row.admission_id: row for row in temporal_rows if row.admission_id
+        }
         # Fallback: match by order for legacy rows without admission_id linkage.
         unmatched_dedup = [row for row in dedup_rows if not row.admission_id]
+        unmatched_temporal = [row for row in temporal_rows if not row.admission_id]
         unmatched_idx = 0
+        unmatched_temporal_idx = 0
 
         results: list[AdmitEventResultItem] = []
         for row in audits:
             dedup_outcome: DeduplicationOutcomeRead | None = None
+            temporal_outcome: TemporalOutcomeRead | None = None
             dedup_row = dedup_by_admission.get(row.id)
+            temporal_row = temporal_by_admission.get(row.id)
             if dedup_row is None and row.decision == "STORE" and unmatched_idx < len(unmatched_dedup):
                 dedup_row = unmatched_dedup[unmatched_idx]
                 unmatched_idx += 1
@@ -385,6 +436,22 @@ class AdmissionService:
                     relationship_confidence=dedup_row.relationship_confidence,
                     similarity_score=dedup_row.similarity_score,
                     reason_codes=list(dedup_row.reason_codes or []),
+                )
+
+            if temporal_row is None and row.decision == "STORE" and unmatched_temporal_idx < len(
+                unmatched_temporal
+            ):
+                temporal_row = unmatched_temporal[unmatched_temporal_idx]
+                unmatched_temporal_idx += 1
+            if temporal_row is not None:
+                temporal_outcome = TemporalOutcomeRead(
+                    relationship=temporal_row.relationship,
+                    matched_memory_id=temporal_row.matched_memory_id,
+                    created_memory_id=temporal_row.created_memory_id,
+                    old_memory_status=temporal_row.new_old_status or temporal_row.old_status,
+                    relationship_confidence=temporal_row.relationship_confidence,
+                    similarity_score=temporal_row.similarity_score,
+                    reason_codes=list(temporal_row.reason_codes or []),
                 )
 
             results.append(
@@ -405,6 +472,7 @@ class AdmissionService:
                     triviality=row.triviality,
                     reason_codes=list(row.reason_codes or []),
                     deduplication=dedup_outcome,
+                    temporal=temporal_outcome,
                 )
             )
 

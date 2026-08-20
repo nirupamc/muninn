@@ -5,6 +5,7 @@ from app.models.deduplication import MemoryDeduplicationDecision, MemoryReinforc
 from app.models.embedding import MemoryEmbedding
 from app.models.event import Event, EventRole
 from app.models.memory import Memory, MemoryStatus, MemoryType
+from app.models.temporal import MemoryTemporalDecision
 
 __all__ = [
     "Event",
@@ -15,5 +16,6 @@ __all__ = [
     "MemoryEmbedding",
     "MemoryReinforcement",
     "MemoryStatus",
+    "MemoryTemporalDecision",
     "MemoryType",
 ]

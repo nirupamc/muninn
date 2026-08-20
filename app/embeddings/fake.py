@@ -48,8 +48,17 @@ class FakeEmbeddingProvider(EmbeddingProvider):
             # Extra axes for M3 preference / stack tests (keeps dim=8).
             "python": 3,
             "backend": 3,
+            "prefer": 3,
+            "prefers": 3,
+            "preferred": 3,
             "fastapi": 4,
             "sqlite": 4,
+            "postgresql": 4,
+            "openai": 5,
+            "apis": 5,
+            "local": 6,
+            "rust": 7,
+            "javascript": 7,
         }
 
     @property
@@ -80,9 +89,17 @@ class FakeEmbeddingProvider(EmbeddingProvider):
                 vec[axis] += 1.0
                 matched = True
 
+        # Cluster preference / usage statements so temporal shortlist works in tests.
+        if tokens & {"prefer", "prefers", "preferred", "preference"}:
+            vec[3] += 3.0
+            matched = True
+        if tokens & {"use", "uses", "using", "used"}:
+            vec[4] += 3.0
+            matched = True
+
         # Stable residual so different unrelated texts are not identical.
         digest = hashlib.sha256(text.encode("utf-8")).digest()
         for i in range(self._dimension):
-            vec[i] += (digest[i] / 255.0) * (0.05 if matched else 0.5)
+            vec[i] += (digest[i] / 255.0) * (0.03 if matched else 0.5)
 
         return l2_normalize(vec).astype(float).tolist()

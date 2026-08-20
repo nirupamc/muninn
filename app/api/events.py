@@ -16,6 +16,8 @@ from app.schemas.admission import (
     AdmissionRecordRead,
     AdmitEventResponse,
     DeduplicationRecordRead,
+    MemoryHistoryResponse,
+    TemporalRecordRead,
 )
 from app.schemas.event import EventCreate, EventRead
 from app.services.event_service import EventService
@@ -94,6 +96,15 @@ def list_event_deduplication(
 ) -> list[DeduplicationRecordRead]:
     rows = service.list_deduplication(event_id)
     return [DeduplicationRecordRead.model_validate(row) for row in rows]
+
+
+@router.get("/{event_id}/temporal", response_model=list[TemporalRecordRead])
+def list_event_temporal(
+    event_id: str,
+    service: AdmissionService = Depends(get_admission_service),
+) -> list[TemporalRecordRead]:
+    rows = service.list_temporal(event_id)
+    return [TemporalRecordRead.model_validate(row) for row in rows]
 
 
 @router.get("/{event_id}", response_model=EventRead)

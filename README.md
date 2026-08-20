@@ -9,7 +9,8 @@ Munin stores durable memory so different LLMs and agents can share context acros
 **M0 — Durable Memory Foundation** ✅  
 **M1 — Semantic Retrieval** ✅  
 **M2 — Memory Admission** ✅  
-**M3 — Deduplication & Reinforcement** ✅
+**M3 — Deduplication & Reinforcement** ✅  
+**M4 — Contradiction + Temporal Memory** ✅
 
 | Concept | Meaning |
 |---------|---------|
@@ -17,9 +18,10 @@ Munin stores durable memory so different LLMs and agents can share context acros
 | **Candidate** | Proposed durable fact extracted from an event |
 | **Admission** | STORE / IGNORE decision with scores + reason codes |
 | **Deduplication** | NEW / DUPLICATE / REINFORCES vs existing memories |
-| **Memory** | Durable knowledge (created only on STORE + NEW) |
+| **Temporal** | NEW / UPDATES / CONTRADICTS / SUPERSEDES for M3-NEW candidates |
+| **Memory** | Durable knowledge with lifecycle (`active`, `superseded`, …) |
 
-Not every message becomes memory. M2 decides what is worth keeping. M3 decides whether we already know it.
+Not every message becomes memory. M2 decides what is worth keeping. M3 decides whether we already know it. M4 decides whether new information changes, conflicts with, or replaces prior truth.
 
 ## Architecture
 
@@ -38,10 +40,125 @@ semantic shortlist (M1 embeddings)
   ↓
 RelationshipProvider
   ↓
-NEW         → MemoryService → Memory + Embedding
+NEW         → TemporalService (M4) → lifecycle + audit
 DUPLICATE   → audit only (no new memory)
 REINFORCES  → reinforcement provenance (no new memory)
+  ↓
+TemporalRelationshipProvider (M3 NEW only)
+  ↓
+NEW         → memory unchanged (additional fact)
+UPDATES     → old superseded, new active, validity windows set
+CONTRADICTS → both active, conflict audited
+SUPERSEDES  → old superseded, new active, explicit replacement
 ```
+
+## M4 — Contradiction + Temporal Memory
+
+### Why M4 exists
+
+M3 stops duplicate storage but does not model changing truth:
+
+```text
+User prefers Python.
+User prefers Rust.
+User no longer uses SQLite.
+I switched from OpenAI to local models.
+```
+
+M4 classifies temporal relationships and applies conservative lifecycle transitions **without deleting history**.
+
+### M2 vs M3 vs M4
+
+| Layer | Question |
+|-------|----------|
+| **M2 Admission** | Is this candidate worth durable memory? |
+| **M3 Dedup** | Do we already know essentially the same thing? |
+| **M4 Temporal** | Does this new fact update, conflict with, or replace prior truth? |
+
+M2 STORE decisions are never rewritten to IGNORE because of M3/M4.
+
+### Relationship types
+
+| Type | Meaning | Typical outcome |
+|------|---------|-----------------|
+| **NEW** | Related or unrelated additional information | New memory; old unchanged |
+| **UPDATES** | Same subject with changed details | Old → `superseded`; new → `active` |
+| **CONTRADICTS** | Conflict without explicit replacement language | Both stay `active`; conflict audited |
+| **SUPERSEDES** | Explicit replacement (`now`, `no longer`, `switched`, negated preference) | Old → `superseded` with `valid_until`; new → `active` with `valid_from` |
+
+### Conservative policy
+
+When the temporal provider is unavailable, returns invalid output, or confidence is below `TEMPORAL_RELATIONSHIP_MIN_CONFIDENCE`:
+
+```text
+default to NEW
+```
+
+**False supersedes destroy current truth** — worse than redundant memories. Munin never auto-supersedes on ambiguous contradiction.
+
+### Memory lifecycle
+
+Memories reuse existing fields:
+
+- `status`: `active`, `superseded`, `invalidated`, `archived`
+- `valid_from` / `valid_until`: validity window for historical retrieval
+
+Superseded rows remain in the database. Search defaults to active-only; pass `statuses=["active","superseded"]` to retrieve history explicitly.
+
+### Temporal audit
+
+Decisions are persisted in `memory_temporal_decisions` with provenance links back to the event, admission row, dedup decision, matched memory, and created memory.
+
+### Providers
+
+| Provider | Purpose |
+|----------|---------|
+| `deterministic` | Phrase-aware rules, default for tests/dev |
+| `openai_compatible` | Local OpenAI-compatible chat endpoint |
+
+```bash
+TEMPORAL_PROVIDER=deterministic
+
+# or local LLM:
+TEMPORAL_PROVIDER=openai_compatible
+TEMPORAL_BASE_URL=http://localhost:8080/v1
+TEMPORAL_MODEL=local-model-name
+TEMPORAL_API_KEY=
+```
+
+### Inspect temporal decisions
+
+```bash
+curl http://127.0.0.1:8000/api/v1/events/<event_id>/temporal
+curl http://127.0.0.1:8000/api/v1/memories/<memory_id>/history
+```
+
+Admit responses include a `temporal` object when M3 returns NEW.
+
+Example:
+
+```json
+{
+  "decision": "STORE",
+  "deduplication": { "relationship": "NEW" },
+  "temporal": {
+    "relationship": "SUPERSEDES",
+    "matched_memory_id": "...",
+    "created_memory_id": "...",
+    "relationship_confidence": 0.94
+  }
+}
+```
+
+### Regression evaluation
+
+```bash
+python -m app.temporal.evaluate
+```
+
+Primary metric: **false_supersede_count** (predicting SUPERSEDES when the truth is not SUPERSEDES).
+
+---
 
 ## M3 — Deduplication & Reinforcement
 
@@ -156,16 +273,7 @@ python -m app.deduplication.evaluate
 
 Primary metric: **false_merge_count** (predicting DUPLICATE/REINFORCES when the truth is NEW).
 
-### M3 limitations (deferred to M4+)
-
-M3 does **not** yet understand:
-
-- contradictions (`CONTRADICTS`)
-- updates / superseding
-- temporal truth / validity windows
-- memory decay or consolidation
-
-Opposite polarity (prefer vs do not prefer) is preserved as **NEW**.
+Opposite polarity (prefer vs do not prefer) is preserved as **NEW** at M3 and resolved at M4 when explicit replacement language is present.
 
 ---
 
@@ -224,7 +332,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/admission/analyze ^
   -d "{\"role\":\"user\",\"content\":\"I ate a burger today.\"}"
 ```
 
-Re-admitting the same event returns previous results (`idempotent_replay: true`) and does not create duplicate memories, dedup audits, or reinforcements.
+Re-admitting the same event returns previous results (`idempotent_replay: true`) and does not create duplicate memories, dedup audits, temporal audits, or reinforcements.
 
 ### Regression evaluation
 
@@ -279,6 +387,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 pytest
 python -m app.admission.evaluate
 python -m app.deduplication.evaluate
+python -m app.temporal.evaluate
 ```
 
 ## Configuration
@@ -302,6 +411,13 @@ python -m app.deduplication.evaluate
 | `DEDUP_BASE_URL` | _(empty)_ | OpenAI-compatible base URL for dedup |
 | `DEDUP_MODEL` | _(empty)_ | Model name for dedup provider |
 | `DEDUP_API_KEY` | _(empty)_ | Optional API key |
+| `TEMPORAL_PROVIDER` | `deterministic` | Temporal classifier backend |
+| `TEMPORAL_CANDIDATE_LIMIT` | `5` | Semantic shortlist depth for M4 |
+| `TEMPORAL_MIN_SIMILARITY` | `0.50` | Minimum cosine for temporal shortlist |
+| `TEMPORAL_RELATIONSHIP_MIN_CONFIDENCE` | `0.75` | Min confidence to accept UPDATES/CONTRADICTS/SUPERSEDES |
+| `TEMPORAL_BASE_URL` | _(empty)_ | OpenAI-compatible base URL for temporal |
+| `TEMPORAL_MODEL` | _(empty)_ | Model name for temporal provider |
+| `TEMPORAL_API_KEY` | _(empty)_ | Optional API key |
 
 ## API surface
 
@@ -312,12 +428,14 @@ python -m app.deduplication.evaluate
 | `GET` | `/api/v1/events` | List events |
 | `GET` | `/api/v1/events/{id}` | Get event |
 | `DELETE` | `/api/v1/events/{id}` | Delete event |
-| `POST` | `/api/v1/events/{id}/admit` | Admit event → dedup → memories |
+| `POST` | `/api/v1/events/{id}/admit` | Admit event → dedup → temporal → memories |
 | `GET` | `/api/v1/events/{id}/admissions` | Inspect admission audits |
 | `GET` | `/api/v1/events/{id}/deduplication` | Inspect dedup decisions |
+| `GET` | `/api/v1/events/{id}/temporal` | Inspect temporal decisions |
 | `POST` | `/api/v1/admission/analyze` | Dry-run analysis |
 | `POST` | `/api/v1/memories` | Create memory (+ embed) |
 | `POST` | `/api/v1/memories/search` | Semantic search |
+| `GET` | `/api/v1/memories/{id}/history` | Temporal history for a memory |
 | `GET/PATCH/DELETE` | `/api/v1/memories...` | Memory CRUD |
 
 ## Roadmap
@@ -328,7 +446,7 @@ python -m app.deduplication.evaluate
 | **M1** | Semantic Retrieval | ✅ |
 | **M2** | Memory Admission | ✅ |
 | **M3** | Deduplication & Reinforcement | ✅ |
-| **M4** | Contradiction + Temporal Memory | future |
+| **M4** | Contradiction + Temporal Memory | ✅ |
 | **M5** | Context Assembly | future |
 | **M6** | Decay + Consolidation | future |
 | **M7** | Agent Integrations + Graph UI | future |

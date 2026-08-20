@@ -1,0 +1,282 @@
+[
+  {
+    "id": "new-unrelated",
+    "candidate": "Munin uses FastAPI.",
+    "existing": "User is building Munin.",
+    "candidate_type": "fact",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "new-different-tool",
+    "candidate": "User uses PostgreSQL for production.",
+    "existing": "User is building Munin.",
+    "candidate_type": "fact",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "supersedes-now-prefer",
+    "candidate": "User now prefers local models.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "supersedes-no-longer-use",
+    "candidate": "User no longer uses SQLite.",
+    "existing": "User uses SQLite for Munin.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "supersedes-switched",
+    "candidate": "User switched from OpenAI to local models.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "fact",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "supersedes-negated-preference",
+    "candidate": "User does not prefer Python anymore.",
+    "existing": "User prefers Python.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "supersedes-migrated-stack",
+    "candidate": "Munin switched from SQLite to PostgreSQL.",
+    "existing": "Munin uses SQLite.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "contradicts-prefer-python-rust",
+    "candidate": "User prefers Rust.",
+    "existing": "User prefers Python.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "CONTRADICTS"
+  },
+  {
+    "id": "contradicts-prefer-openai-local-no-cue",
+    "candidate": "User prefers local models.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "CONTRADICTS"
+  },
+  {
+    "id": "updates-now-same-domain",
+    "candidate": "User now prefers OpenAI APIs.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "UPDATES"
+  },
+  {
+    "id": "updates-usage-detail",
+    "candidate": "User now uses PostgreSQL for Munin production.",
+    "existing": "User uses SQLite for Munin.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "UPDATES"
+  },
+  {
+    "id": "new-still-language",
+    "candidate": "User still uses FastAPI.",
+    "existing": "User uses FastAPI.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "new-still-prefer",
+    "candidate": "User still prefers OpenAI APIs.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "new-low-overlap",
+    "candidate": "User prefers Rust for systems work.",
+    "existing": "User is building Munin.",
+    "candidate_type": "preference",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "new-type-mismatch",
+    "candidate": "User prefers Python.",
+    "existing": "User is building RagParser.",
+    "candidate_type": "preference",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "supersedes-used-to-now",
+    "candidate": "User now prefers Rust.",
+    "existing": "User used to prefer JavaScript.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "supersedes-replaced-with",
+    "candidate": "User replaced SQLite with PostgreSQL.",
+    "existing": "User uses SQLite.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-building-vs-uses",
+    "candidate": "Munin uses SQLite.",
+    "existing": "User is building Munin.",
+    "candidate_type": "fact",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "contradicts-backend-choice",
+    "candidate": "User prefers Django.",
+    "existing": "User prefers FastAPI.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "CONTRADICTS"
+  },
+  {
+    "id": "new-negation-unrelated",
+    "candidate": "User does not prefer Java.",
+    "existing": "User is building Munin.",
+    "candidate_type": "preference",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "supersedes-stopped-using",
+    "candidate": "User stopped using FastAPI.",
+    "existing": "User uses FastAPI.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-unrelated-preference",
+    "candidate": "User prefers PostgreSQL.",
+    "existing": "User uses FastAPI.",
+    "candidate_type": "preference",
+    "existing_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "updates-munin-stack",
+    "candidate": "Munin now uses PostgreSQL for production.",
+    "existing": "Munin uses SQLite.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "UPDATES"
+  },
+  {
+    "id": "new-ragparser-fact",
+    "candidate": "RagParser uses PDF parsing.",
+    "existing": "User is building RagParser.",
+    "candidate_type": "fact",
+    "existing_type": "project",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "contradicts-tool-preference",
+    "candidate": "User prefers SQLite.",
+    "existing": "User prefers PostgreSQL.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "CONTRADICTS"
+  },
+  {
+    "id": "supersedes-dont-use",
+    "candidate": "User don't use SQLite anymore.",
+    "existing": "User uses SQLite.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-goal-vs-preference",
+    "candidate": "User aims to ship Munin v1.",
+    "existing": "User prefers Python.",
+    "candidate_type": "goal",
+    "existing_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "supersedes-migrated-munin",
+    "candidate": "Munin migrated from SQLite to PostgreSQL.",
+    "existing": "Munin uses SQLite for storage.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-partial-overlap",
+    "candidate": "User prefers OpenAI for embeddings.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "contradicts-language-preference",
+    "candidate": "User prefers JavaScript.",
+    "existing": "User prefers Rust.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "CONTRADICTS"
+  },
+  {
+    "id": "supersedes-openai-local-explicit",
+    "candidate": "User switched from OpenAI to local models.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "fact",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-insufficient-overlap",
+    "candidate": "User uses Rust for CLI tools.",
+    "existing": "User prefers Python.",
+    "candidate_type": "fact",
+    "existing_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "updates-openai-same-object",
+    "candidate": "User now prefers OpenAI.",
+    "existing": "User prefers OpenAI APIs.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "UPDATES"
+  },
+  {
+    "id": "new-contradiction-deferred-m3",
+    "candidate": "User does not prefer Python.",
+    "existing": "User prefers Python.",
+    "candidate_type": "preference",
+    "existing_type": "preference",
+    "expected_relationship": "SUPERSEDES"
+  },
+  {
+    "id": "new-entity-fastapi-munin",
+    "candidate": "Munin uses FastAPI.",
+    "existing": "User still uses FastAPI.",
+    "candidate_type": "fact",
+    "existing_type": "fact",
+    "expected_relationship": "NEW"
+  }
+]

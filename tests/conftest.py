@@ -19,6 +19,8 @@ from app.deduplication.providers.deterministic import DeterministicRelationshipP
 from app.embeddings.factory import get_embedding_provider, set_embedding_provider_override
 from app.embeddings.fake import FakeEmbeddingProvider
 from app.main import create_app
+from app.temporal.factory import get_temporal_provider, set_temporal_provider_override
+from app.temporal.providers.deterministic import DeterministicTemporalProvider
 from app.models import (  # noqa: F401
     Event,
     Memory,
@@ -26,6 +28,7 @@ from app.models import (  # noqa: F401
     MemoryDeduplicationDecision,
     MemoryEmbedding,
     MemoryReinforcement,
+    MemoryTemporalDecision,
 )
 
 
@@ -77,12 +80,18 @@ def db_session(engine) -> Session:
 
 
 @pytest.fixture()
-def client(engine, fake_provider, admission_provider, relationship_provider) -> TestClient:
+def temporal_provider() -> DeterministicTemporalProvider:
+    return DeterministicTemporalProvider()
+
+
+@pytest.fixture()
+def client(engine, fake_provider, admission_provider, relationship_provider, temporal_provider) -> TestClient:
     TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     app = create_app()
     set_embedding_provider_override(fake_provider)
     set_admission_provider_override(admission_provider)
     set_relationship_provider_override(relationship_provider)
+    set_temporal_provider_override(temporal_provider)
 
     def _override_get_db():
         session = TestingSessionLocal()
@@ -95,9 +104,11 @@ def client(engine, fake_provider, admission_provider, relationship_provider) -> 
     app.dependency_overrides[get_embedding_provider] = lambda: fake_provider
     app.dependency_overrides[get_admission_provider] = lambda: admission_provider
     app.dependency_overrides[get_relationship_provider] = lambda: relationship_provider
+    app.dependency_overrides[get_temporal_provider] = lambda: temporal_provider
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     set_embedding_provider_override(None)
     set_admission_provider_override(None)
     set_relationship_provider_override(None)
+    set_temporal_provider_override(None)

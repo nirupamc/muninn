@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401
     MemoryDeduplicationDecision,
     MemoryEmbedding,
     MemoryReinforcement,
+    MemoryTemporalDecision,
 )
 
 config = context.config
