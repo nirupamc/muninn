@@ -1,0 +1,157 @@
+[
+  {
+    "id": "project_ragparser",
+    "content": "I'm building RagParser.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "project"
+  },
+  {
+    "id": "project_munin",
+    "content": "I'm building Munin.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "project"
+  },
+  {
+    "id": "preference_python",
+    "content": "I prefer Python for backend development.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "preference"
+  },
+  {
+    "id": "preference_neovim",
+    "content": "I prefer Neovim as my editor.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "preference"
+  },
+  {
+    "id": "goal_article",
+    "content": "My goal is to publish an article about agent memory.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "goal"
+  },
+  {
+    "id": "goal_local_first",
+    "content": "My long-term goal is to build local-first AI tools.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "goal"
+  },
+  {
+    "id": "decision_sqlite",
+    "content": "We decided to use SQLite for Munin M0.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "decision"
+  },
+  {
+    "id": "remember_python",
+    "content": "Remember that I prefer Python.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "preference"
+  },
+  {
+    "id": "remember_llamacpp",
+    "content": "Remember that I use llama.cpp for local inference.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "fact"
+  },
+  {
+    "id": "project_with_desc",
+    "content": "I'm building RagParser, a local-first document parser.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "project"
+  },
+  {
+    "id": "stable_fact_stack",
+    "content": "RagParser is a local-first document parser.",
+    "expected_decision": "IGNORE",
+    "expected_memory_type": null
+  },
+  {
+    "id": "trivial_burger",
+    "content": "I ate a burger today.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "trivial_pizza",
+    "content": "I ate pizza for lunch.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "ephemeral_sleepy",
+    "content": "I'm sleepy right now.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "ephemeral_port",
+    "content": "The server is currently on port 8001.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "ephemeral_back",
+    "content": "I'll be back in five minutes.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "temp_preference",
+    "content": "I feel like using Python today.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "secret_api_key",
+    "content": "Remember my API key: sk-test-secret-123456",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "secret_password",
+    "content": "Remember that my password is hunter2",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "debugging_fastapi",
+    "content": "I'm debugging FastAPI.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "ambiguous_hello",
+    "content": "Hello there.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "test_failed",
+    "content": "That test failed just now.",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "multi_munin_sqlite",
+    "content": "I'm building Munin in Python and using SQLite for the first version.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "project"
+  },
+  {
+    "id": "mixed_munin_pizza",
+    "content": "I'm building Munin, and I ate pizza.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "project"
+  },
+  {
+    "id": "goal_model_independent",
+    "content": "My goal is to build model-independent memory for agents.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "goal"
+  },
+  {
+    "id": "prefer_backend",
+    "content": "I prefer TypeScript for frontend work.",
+    "expected_decision": "STORE",
+    "expected_memory_type": "preference"
+  },
+  {
+    "id": "jwt_token",
+    "content": "Here is my token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def",
+    "expected_decision": "IGNORE"
+  },
+  {
+    "id": "bearer_header",
+    "content": "Authorization: Bearer abcdefghijklmnop",
+    "expected_decision": "IGNORE"
+  }
+]

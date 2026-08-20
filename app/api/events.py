@@ -3,8 +3,14 @@
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.admission.base import AdmissionProvider
+from app.admission.factory import get_admission_provider
+from app.admission.service import AdmissionService
 from app.database import get_db
+from app.embeddings.base import EmbeddingProvider
+from app.embeddings.factory import get_embedding_provider
 from app.models.event import EventRole
+from app.schemas.admission import AdmissionRecordRead, AdmitEventResponse
 from app.schemas.event import EventCreate, EventRead
 from app.services.event_service import EventService
 
@@ -13,6 +19,18 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 def _to_read(event) -> EventRead:
     return EventRead.model_validate(event)
+
+
+def get_admission_service(
+    db: Session = Depends(get_db),
+    admission_provider: AdmissionProvider = Depends(get_admission_provider),
+    embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
+) -> AdmissionService:
+    return AdmissionService(
+        db,
+        admission_provider=admission_provider,
+        embedding_provider=embedding_provider,
+    )
 
 
 @router.post("", response_model=EventRead, status_code=status.HTTP_201_CREATED)
@@ -42,6 +60,23 @@ def list_events(
         offset=offset,
     )
     return [_to_read(event) for event in events]
+
+
+@router.post("/{event_id}/admit", response_model=AdmitEventResponse)
+def admit_event(
+    event_id: str,
+    service: AdmissionService = Depends(get_admission_service),
+) -> AdmitEventResponse:
+    return service.admit_event(event_id)
+
+
+@router.get("/{event_id}/admissions", response_model=list[AdmissionRecordRead])
+def list_event_admissions(
+    event_id: str,
+    service: AdmissionService = Depends(get_admission_service),
+) -> list[AdmissionRecordRead]:
+    rows = service.list_admissions(event_id)
+    return [AdmissionRecordRead.model_validate(row) for row in rows]
 
 
 @router.get("/{event_id}", response_model=EventRead)

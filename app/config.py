@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str = "cpu"
 
+    admission_provider: str = "deterministic"
+    admission_store_threshold: float = 0.65
+    admission_min_confidence: float = 0.60
+    admission_base_url: str = ""
+    admission_model: str = ""
+    admission_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

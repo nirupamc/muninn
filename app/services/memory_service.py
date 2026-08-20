@@ -26,7 +26,7 @@ class MemoryService:
         self.event_repo = EventRepository(db)
         self.embedding_service = EmbeddingService(db, provider=embedding_provider)
 
-    def create(self, payload: MemoryCreate) -> Memory:
+    def create(self, payload: MemoryCreate, *, commit: bool = True) -> Memory:
         if payload.source_event_id is not None:
             source = self.event_repo.get_by_id(payload.source_event_id)
             if source is None:
@@ -53,11 +53,13 @@ class MemoryService:
         try:
             memory = self.repo.create(memory, commit=False)
             self.embedding_service.embed_memory(memory, commit=False)
-            self.db.commit()
-            self.db.refresh(memory)
+            if commit:
+                self.db.commit()
+                self.db.refresh(memory)
             return memory
         except Exception:
-            self.db.rollback()
+            if commit:
+                self.db.rollback()
             raise
 
     def get(self, memory_id: str) -> Memory:
