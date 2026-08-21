@@ -11,6 +11,7 @@ import re
 from app.deduplication.base import RelationshipProvider
 from app.deduplication.models import RelationshipAnalysis, RelationshipType
 from app.deduplication.normalize import normalize_for_exact_match
+from app.deduplication.state_change import contains_state_change_signal
 from app.models.memory import MemoryType
 
 _NEGATION = re.compile(
@@ -128,6 +129,16 @@ class DeterministicRelationshipProvider(RelationshipProvider):
                 relationship=RelationshipType.DUPLICATE,
                 confidence=1.0,
                 explanation="Normalized text identical",
+            )
+
+        if contains_state_change_signal(candidate):
+            return RelationshipAnalysis(
+                relationship=RelationshipType.NEW,
+                confidence=0.95,
+                explanation=(
+                    "Explicit state-change language; deferred to temporal analysis (M4)"
+                ),
+                defer_temporal=True,
             )
 
         cand_neg = bool(_NEGATION.search(candidate))

@@ -19,6 +19,7 @@ from app.deduplication.factory import get_relationship_provider
 from app.deduplication.models import DedupReasonCode, RelationshipType
 from app.deduplication.normalize import normalize_for_exact_match
 from app.deduplication.policy import DedupPolicyConfig, apply_relationship_policy
+from app.deduplication.state_change import contains_state_change_signal
 from app.embeddings.base import EmbeddingProvider
 from app.models.deduplication import MemoryDeduplicationDecision, MemoryReinforcement
 from app.models.event import Event
@@ -97,7 +98,7 @@ class DeduplicationService:
             user_id=event.user_id,
             content=content,
         )
-        if exact is not None:
+        if exact is not None and not contains_state_change_signal(content):
             result = DeduplicationResult(
                 relationship=RelationshipType.DUPLICATE,
                 confidence=1.0,

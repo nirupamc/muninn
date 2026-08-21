@@ -48,10 +48,13 @@ def apply_relationship_policy(
         )
 
     if analysis.relationship == RelationshipType.NEW:
+        reason_codes = [DedupReasonCode.RELATED_BUT_NEW]
+        if analysis.defer_temporal:
+            reason_codes.insert(0, DedupReasonCode.STATE_CHANGE_REQUIRES_TEMPORAL_ANALYSIS)
         return PolicyOutcome(
             relationship=RelationshipType.NEW,
             confidence=analysis.confidence,
-            reason_codes=[DedupReasonCode.RELATED_BUT_NEW],
+            reason_codes=reason_codes,
             explanation=analysis.explanation,
         )
 

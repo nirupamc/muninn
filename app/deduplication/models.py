@@ -28,6 +28,7 @@ class DedupReasonCode(str, Enum):
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     LOW_CONFIDENCE = "LOW_CONFIDENCE"
     TYPE_MISMATCH_PRESERVE = "TYPE_MISMATCH_PRESERVE"
+    STATE_CHANGE_REQUIRES_TEMPORAL_ANALYSIS = "STATE_CHANGE_REQUIRES_TEMPORAL_ANALYSIS"
 
 
 class RelationshipAnalysis(BaseModel):
@@ -36,3 +37,4 @@ class RelationshipAnalysis(BaseModel):
     relationship: RelationshipType
     confidence: float = Field(ge=0.0, le=1.0)
     explanation: str | None = None
+    defer_temporal: bool = False

@@ -158,6 +158,23 @@ python -m app.temporal.evaluate
 
 Primary metric: **false_supersede_count** (predicting SUPERSEDES when the truth is not SUPERSEDES).
 
+### M4.1 — Dedup / Temporal boundary
+
+M3 owns **semantic duplicate and reinforcement** detection:
+
+```text
+"Munin uses SQLite."  ≈  "Munin is using SQLite."  → DUPLICATE / REINFORCES
+```
+
+M4 owns **changes of state**. Candidates with explicit transition language are preserved as **M3 NEW** (reason code `STATE_CHANGE_REQUIRES_TEMPORAL_ANALYSIS`) so temporal analysis can classify them:
+
+```text
+"Munin still uses SQLite."              → M3 REINFORCES (continuity)
+"Munin switched from SQLite to PostgreSQL." → M3 NEW → M4 SUPERSEDES / UPDATES
+```
+
+Continuity phrases (`still`, `remains`, `continues to`) do **not** trigger the boundary. Change cues (`switched`, `migrated`, `no longer`, `now prefers`, `used to`, `replaced`, …) do.
+
 ---
 
 ## M3 — Deduplication & Reinforcement
@@ -273,7 +290,11 @@ python -m app.deduplication.evaluate
 
 Primary metric: **false_merge_count** (predicting DUPLICATE/REINFORCES when the truth is NEW).
 
-Opposite polarity (prefer vs do not prefer) is preserved as **NEW** at M3 and resolved at M4 when explicit replacement language is present.
+Boundary metric (M4.1): **false_duplicate_on_temporal_change_count** — must be `0` on `tests/fixtures/dedup_boundary_cases.json`.
+
+### M4.1 boundary (M3 side)
+
+Change-of-state candidates must not be collapsed as M3 DUPLICATE. See M4.1 section under M4 above.
 
 ---
 

@@ -31,6 +31,10 @@ Rules:
 - Opposite polarity (prefers vs does not prefer) is NOT DUPLICATE — return NEW.
 - Different memory types (e.g. project vs goal) usually require NEW unless propositions are identical.
 - Do NOT classify CONTRADICTS / UPDATES / SUPERSEDES — those are out of scope; prefer NEW when unsure.
+- Change-of-state language (switched, migrated, no longer, stopped using, now uses/prefers,
+  used to, replaced, anymore) is NOT DUPLICATE even when it shares words with the existing
+  memory — return NEW so temporal analysis (M4) can handle it.
+- Continuity language (still, remains, continues to) confirming the same fact → REINFORCES.
 - Be conservative: when uncertain, prefer NEW with lower confidence.
 """
 

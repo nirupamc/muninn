@@ -1,0 +1,106 @@
+[
+  {
+    "id": "boundary_switch_db",
+    "existing": "Munin uses SQLite.",
+    "candidate": "Munin switched from SQLite to PostgreSQL.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_migrate_db",
+    "existing": "Munin uses SQLite.",
+    "candidate": "Munin migrated from SQLite to PostgreSQL.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_migrate_to_only",
+    "existing": "Munin uses SQLite.",
+    "candidate": "Munin migrated to PostgreSQL.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_no_longer",
+    "existing": "User uses SQLite.",
+    "candidate": "User no longer uses SQLite.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_stopped_using",
+    "existing": "User uses SQLite.",
+    "candidate": "User stopped using SQLite.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_now_prefers",
+    "existing": "User prefers OpenAI.",
+    "candidate": "User now prefers local models.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_used_to_prefer",
+    "existing": "User prefers JavaScript.",
+    "candidate": "User used to prefer JavaScript.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_negated_preference",
+    "existing": "User prefers Python.",
+    "candidate": "User does not prefer Python anymore.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_replaced",
+    "existing": "Munin uses SQLite.",
+    "candidate": "PostgreSQL replaced SQLite in Munin.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  },
+  {
+    "id": "boundary_still_reinforces",
+    "existing": "User prefers Python.",
+    "candidate": "User still prefers Python.",
+    "existing_type": "preference",
+    "candidate_type": "preference",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "boundary_still_uses",
+    "existing": "Munin uses SQLite.",
+    "candidate": "Munin still uses SQLite.",
+    "existing_type": "fact",
+    "candidate_type": "fact",
+    "expected_relationship": "REINFORCES"
+  },
+  {
+    "id": "boundary_paraphrase_duplicate",
+    "existing": "User is building RagParser.",
+    "candidate": "RagParser is a project the user is working on.",
+    "existing_type": "project",
+    "candidate_type": "project",
+    "expected_relationship": "DUPLICATE"
+  },
+  {
+    "id": "boundary_related_new_fact",
+    "existing": "User is building Munin.",
+    "candidate": "Munin uses FastAPI.",
+    "existing_type": "project",
+    "candidate_type": "fact",
+    "expected_relationship": "NEW"
+  }
+]
