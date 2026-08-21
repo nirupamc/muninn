@@ -101,3 +101,5 @@ class ContextConfig:
     weight_reinforcement: float = 0.05
     recency_lambda: float = 0.05
     min_semantic_score: float = 0.0
+    # M6 decay integration
+    decay_enabled: bool = True

@@ -11,7 +11,8 @@ Munin stores durable memory so different LLMs and agents can share context acros
 **M2 — Memory Admission** ✅  
 **M3 — Deduplication & Reinforcement** ✅  
 **M4 — Contradiction + Temporal Memory** ✅  
-**M5 — Context Assembly** ✅
+**M5 — Context Assembly** ✅  
+**M6 — Decay + Consolidation** ✅
 
 | Concept | Meaning |
 |---------|---------|
@@ -706,16 +707,244 @@ app/context/
     └── simple.py        — ceil(len/4) estimator
 ```
 
-### M6+ (future work)
+## M6 — Decay + Consolidation
 
-M6 will introduce **persistent memory decay and consolidation**:
+M6 adds two complementary, conservative mechanisms so memory remains relevant without ever destroying or mutating knowledge:
 
-- Importance decay for stale memories
-- Automatic archival below a threshold
-- Episodic → semantic summarisation
-- Knowledge graph
+1. **Decay** — stale memories lose *effective relevance* over time (computed at query time).
+2. **Consolidation** — groups of related memories are compressed into a **derived** summary memory, with full provenance.
 
-M5 recency is query-time only and does not persist any decay values. M5 does not archive or delete memories.
+### Stored importance vs effective importance
+
+Munin keeps two distinct notions of importance:
+
+| Concept | Meaning | Where it lives |
+|---------|---------|----------------|
+| **Stored importance** | The `importance` column on a memory row. Set at admission (M2) and never changed by decay. | Persisted in the DB |
+| **Effective importance** | Stored importance × decay multiplier, computed at query time. Used for ranking only. | Computed on the fly; never written back |
+
+**Stored importance never changes.** Decay is a pure, deterministic function of (`memory_type`, `created_at`, `as_of`). It is recomputed on every query and produces identical results for a fixed `as_of`.
+
+### Decay profiles
+
+`DecayProfile` controls how quickly a memory type ages out of effective relevance:
+
+| Profile | λ (per-day) | Meaning |
+|---------|------------|---------|
+| **NONE** | `0.0` | Importance never decays (e.g. pinned system memories) |
+| **SLOW** | `0.002` | Long-lived knowledge: projects, goals, preferences |
+| **NORMAL** | `0.01` | Medium-lived: decisions, procedures, facts |
+| **FAST** | `0.05` | Short-lived: events |
+| **EPHEMERAL** | `0.20` | Very transient content (e.g. debugging sessions) |
+
+### Profile mapping by memory type
+
+The default profile is looked up per memory type (no DB column is added):
+
+```text
+project / goal / preference / relationship → SLOW
+decision / procedure / fact / other        → NORMAL
+event                                      → FAST
+```
+
+A type without an explicit mapping defaults to `NORMAL`.
+
+<!-- M6REST -->
+### Decay formula
+
+```
+decay_multiplier = exp(-λ · age_days)     (λ = profile decay rate)
+
+effective_importance = clamp(
+    stored_importance × decay_multiplier × reinforcement_modifier,
+    0, 1
+)
+```
+
+- `age_days` is the (non-negative) age between `created_at` and `as_of`.
+- `reinforcement_modifier` is a small bounded boost (1.0 → at most 1.1) from M3 reinforcement provenance.
+- For `DecayProfile.NONE`, the multiplier is always `1.0`.
+
+### as_of-aware decay
+
+All decay calculations accept an explicit `as_of` timestamp. This makes decay **deterministic for historical queries**: the same fixed `as_of` always yields the same profile, multiplier, and effective importance — even after a restart.
+
+### M5 now uses effective importance
+
+M5's hybrid ranking `final_score` now uses **effective importance** (stored importance × decay multiplier) for its importance component. This means old, fast-decaying events rank below stable projects of equal age and stored importance.
+
+### Recency remains query-time only
+
+M5's small recency signal (`exp(-λ·age)`) is **separate** from the decay multiplier. Both act at query time, but decay adjusts the importance component while recency remains its own small factor. Neither ever persists a decay value back to the row.
+
+### Decay never deletes memories
+
+- Decay does **not** mutate stored importance.
+- Decay alone does **not** archive, delete, or supersede any memory.
+- A memory whose effective importance has decayed is simply ranked lower in context; it is never automatically destroyed.
+
+<!-- M6REST2 -->
+### Why consolidation exists
+
+Long-lived agents accumulate many narrow, related memories. Consolidation compresses a group of related memories into **one derived summary** so context stays concise without discarding the underlying evidence.
+
+### Consolidated memory vs source memories
+
+- A **consolidated memory** is a *new* `memories` row produced by a provider from a group of source memories.
+- It is marked by `metadata_.is_consolidated = true`.
+- **Source memories are never deleted or superseded.** A consolidated summary is evidence about many sources, not a replacement for them.
+
+### Consolidation is NOT superseding
+
+M4 `supersedes` replaces a truth with a newer truth. Consolidation **never** changes a source memory's `status`. A consolidated memory has status `active` alongside its sources, which remain active and queryable.
+
+### Relational provenance
+
+Every consolidation creates audit rows in two tables:
+
+- `memory_consolidations` — one row per operation: derived memory id, namespace, user, provider, confidence, reason.
+- `memory_consolidation_sources` — one row per source memory, linking the audit record to each source memory id.
+
+`GET /api/v1/memories/{id}/consolidation` returns provenance for a derived memory.
+`GET /api/v1/memories/{id}/consolidated-from` lists every consolidation that used a memory as a source.
+
+### Providers
+
+| Provider | Purpose |
+|----------|---------|
+| `deterministic` | Rule-based, offline. Default for tests / dev. |
+| `openai_compatible` | Any OpenAI-style chat completions endpoint (OpenAI or local: Ollama, LM Studio, vLLM). |
+
+```bash
+CONSOLIDATION_PROVIDER=deterministic
+
+# or local LLM:
+CONSOLIDATION_PROVIDER=openai_compatible
+CONSOLIDATION_BASE_URL=http://localhost:8080/v1
+CONSOLIDATION_MODEL=local-model-name
+CONSOLIDATION_API_KEY=
+```
+
+The provider abstraction enforces **safety in all implementations**: only summarise facts already in the sources, preserve negation/uncertainty/entity names, never infer new facts, and refuse (return None) when contradictions are detected.
+
+<!-- M6REST3 -->
+### Manual consolidation endpoint
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/memories/consolidate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace": "personal",
+    "memory_ids": ["<id-1>", "<id-2>", "<id-3>"],
+    "dry_run": false
+  }'
+```
+
+The response returns the new `consolidated_memory_id`, the derived content, and `is_new` (whether this exact source set has already been consolidated).
+
+### Preview endpoint
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/memories/consolidate/preview \
+  -H "Content-Type: application/json" \
+  -d '{ "namespace": "personal", "memory_ids": ["<id-1>", "<id-2>", "<id-3>"] }'
+```
+
+`preview` runs the provider and returns the proposed summary **without persisting anything**. It is safe to call repeatedly and creates zero DB rows.
+
+### Contradiction safety
+
+Munin never silently merges contradictory memories. If the provider detects an unresolved contradiction (or confidence is below `CONSOLIDATION_MIN_CONFIDENCE`), consolidation is **refused** with HTTP 422. The default safe behavior is to refuse consolidation rather than collapse conflicting facts.
+
+### Namespace / user isolation
+
+Consolidation is scoped to **one namespace, one user**. `_validate_sources` rejects any memory whose namespace or `user_id` differs from the request — a foreign memory raises HTTP 422. A derived memory inherits the namespace/user of its sources.
+
+### Idempotency
+
+Repeating an identical source set returns the existing derived memory instead of creating a duplicate (`is_new=false`). A second semantic duplicate check compares the proposal embedding against existing consolidated memories in the same namespace (cosine ≥ 0.92, stricter than M5 redundancy suppression).
+
+<!-- M6REST4 -->
+### Evaluation commands
+
+```bash
+python -m app.deduplication.evaluate   # M3
+python -m app.temporal.evaluate        # M4
+python -m app.context.evaluate         # M5
+python -m app.decay.evaluate           # M6 decay
+python -m app.consolidation.evaluate   # M6 consolidation
+```
+
+M6 decay safety targets:
+
+```text
+no_mutation_count                = 0
+historical_determinism_failures  = 0
+ranking_regression_count         = 0
+```
+
+M6 consolidation safety targets:
+
+```text
+unsupported_fact_count        = 0
+contradiction_merge_count     = 0
+namespace_leak_count          = 0
+user_leak_count               = 0
+duplicate_consolidation_count = 0
+rollback_failure_count        = 0
+```
+
+Manual verification:
+
+```bash
+python scripts/manual_m6_verify.py
+```
+
+### Module layout
+
+```text
+app/decay/
+├── __init__.py       — exports DecayProfile, decay_lambda, profile_for_type,
+│                       compute_decay_multiplier, compute_effective_importance
+├── profiles.py        — DecayProfile enum + memory-type mapping
+├── calculator.py      — multiplier / effective importance (pure functions)
+└── evaluate.py        — evaluation harness
+
+app/consolidation/
+├── __init__.py
+├── base.py            — ConsolidationProvider ABC
+├── factory.py         — provider factory
+├── models.py          — request/response + proposal models
+├── service.py         — orchestration + atomic persistence
+├── evaluate.py        — evaluation harness
+└── providers/
+    ├── deterministic.py
+    └── openai_compatible.py
+
+app/models/consolidation.py             — MemoryConsolidation + Source ORM
+app/repositories/consolidation_repository.py
+app/api/consolidation.py                — HTTP endpoints
+```
+
+### Database migration 006
+
+Migration `alembic/versions/006_memory_consolidation.py` creates two tables:
+
+- `memory_consolidations` — one row per consolidation operation (namespace, user, created_memory_id FK, provider, confidence, reason, created_at).
+- `memory_consolidation_sources` — many-to-many source links (consolidation_id FK, source_memory_id FK to `memories`).
+
+Both use `ondelete="CASCADE"`: deleting a source or derived memory removes its orphan links, never the other memories. Downgrade drops the source table first, then the audit table.
+
+Run:
+
+```bash
+alembic upgrade head
+```
+
+### Status
+
+- **M6** ✅ — Decay + Consolidation implemented, tested, and verified.
+- **M7** (future) — Agent integrations and a graph UI are not started.
 
 ## Roadmap
 
@@ -727,5 +956,5 @@ M5 recency is query-time only and does not persist any decay values. M5 does not
 | **M3** | Deduplication & Reinforcement | ✅ |
 | **M4** | Contradiction + Temporal Memory | ✅ |
 | **M5** | Context Assembly | ✅ |
-| **M6** | Decay + Consolidation | future |
+| **M6** | Decay + Consolidation | ✅ |
 | **M7** | Agent Integrations + Graph UI | future |

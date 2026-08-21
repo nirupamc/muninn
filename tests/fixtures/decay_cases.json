@@ -1,0 +1,237 @@
+{
+  "description": "M6 Decay evaluation fixture",
+  "version": "1",
+  "cases": [
+    {
+      "id": "decay-profile-001",
+      "category": "profile_order",
+      "description": "SLOW profile produces higher multiplier than NORMAL at same age",
+      "memory_type_slow": "project",
+      "memory_type_normal": "fact",
+      "age_days": 60,
+      "checks": { "slow_gt_normal": true }
+    },
+    {
+      "id": "decay-profile-002",
+      "category": "profile_order",
+      "description": "NORMAL profile produces higher multiplier than FAST at same age",
+      "memory_type_slow": "fact",
+      "memory_type_normal": "event",
+      "age_days": 30,
+      "checks": { "slow_gt_normal": true }
+    },
+    {
+      "id": "decay-profile-003",
+      "category": "profile_order",
+      "description": "SLOW project still substantially higher than FAST event at 90 days",
+      "memory_type_slow": "project",
+      "memory_type_normal": "event",
+      "age_days": 90,
+      "checks": { "slow_gt_normal": true, "ratio_gt": 5.0 }
+    },
+    {
+      "id": "decay-profile-004",
+      "category": "profile_order",
+      "description": "Goal (SLOW) retains more relevance than decision (NORMAL) at 60 days",
+      "memory_type_slow": "goal",
+      "memory_type_normal": "decision",
+      "age_days": 60,
+      "checks": { "slow_gt_normal": true }
+    },
+    {
+      "id": "decay-profile-005",
+      "category": "profile_order",
+      "description": "Preference (SLOW) retains more than procedure (NORMAL) at 30 days",
+      "memory_type_slow": "preference",
+      "memory_type_normal": "procedure",
+      "age_days": 30,
+      "checks": { "slow_gt_normal": true }
+    },
+    {
+      "id": "decay-zero-age-001",
+      "category": "zero_age",
+      "description": "Zero-age event memory has multiplier ≈ 1.0",
+      "memory_type": "event",
+      "age_days": 0,
+      "checks": { "multiplier_approx_one": true, "tolerance": 0.001 }
+    },
+    {
+      "id": "decay-zero-age-002",
+      "category": "zero_age",
+      "description": "Zero-age project memory has multiplier ≈ 1.0",
+      "memory_type": "project",
+      "age_days": 0,
+      "checks": { "multiplier_approx_one": true, "tolerance": 0.001 }
+    },
+    {
+      "id": "decay-zero-age-003",
+      "category": "zero_age",
+      "description": "Zero-age fact memory has multiplier ≈ 1.0",
+      "memory_type": "fact",
+      "age_days": 0,
+      "checks": { "multiplier_approx_one": true, "tolerance": 0.001 }
+    },
+    {
+      "id": "decay-old-event-001",
+      "category": "old_episodic",
+      "description": "60-day-old event memory has low multiplier (< 0.10)",
+      "memory_type": "event",
+      "age_days": 60,
+      "checks": { "multiplier_lt": 0.10 }
+    },
+    {
+      "id": "decay-old-event-002",
+      "category": "old_episodic",
+      "description": "30-day-old event has lower multiplier than 5-day-old event",
+      "memory_type": "event",
+      "age_days_a": 30,
+      "age_days_b": 5,
+      "checks": { "a_lt_b": true }
+    },
+    {
+      "id": "decay-old-event-003",
+      "category": "old_episodic",
+      "description": "Old event effective importance much lower than stored",
+      "memory_type": "event",
+      "stored_importance": 0.8,
+      "age_days": 60,
+      "checks": { "effective_lt": 0.10 }
+    },
+    {
+      "id": "decay-stable-project-001",
+      "category": "stable_project",
+      "description": "60-day-old project memory retains > 85% of stored importance",
+      "memory_type": "project",
+      "stored_importance": 0.8,
+      "age_days": 60,
+      "checks": { "effective_gt": 0.68 }
+    },
+    {
+      "id": "decay-stable-project-002",
+      "category": "stable_project",
+      "description": "180-day-old project memory still retains > 50% of stored importance",
+      "memory_type": "project",
+      "stored_importance": 0.8,
+      "age_days": 180,
+      "checks": { "effective_gt": 0.40 }
+    },
+    {
+      "id": "decay-stable-project-003",
+      "category": "stable_project",
+      "description": "365-day-old project memory still nonzero",
+      "memory_type": "project",
+      "stored_importance": 0.8,
+      "age_days": 365,
+      "checks": { "effective_gt": 0.10 }
+    },
+    {
+      "id": "decay-no-mutation-001",
+      "category": "no_mutation",
+      "description": "compute_effective_importance does not alter stored importance",
+      "memory_type": "event",
+      "stored_importance": 0.75,
+      "age_days": 90,
+      "checks": { "stored_unchanged": true }
+    },
+    {
+      "id": "decay-no-mutation-002",
+      "category": "no_mutation",
+      "description": "compute_decay_multiplier does not alter any state",
+      "memory_type": "project",
+      "stored_importance": 0.9,
+      "age_days": 30,
+      "checks": { "stored_unchanged": true }
+    },
+    {
+      "id": "decay-as-of-001",
+      "category": "historical_determinism",
+      "description": "Same fixed as_of always produces same multiplier",
+      "memory_type": "project",
+      "as_of_fixed": "2030-01-01T00:00:00Z",
+      "created_at_fixed": "2029-06-01T00:00:00Z",
+      "checks": { "deterministic": true }
+    },
+    {
+      "id": "decay-as-of-002",
+      "category": "historical_determinism",
+      "description": "Earlier as_of means memory appears older (more time elapsed) → lower multiplier than later as_of",
+      "memory_type": "event",
+      "created_at_days_ago": 60,
+      "as_of_options": [30, 60],
+      "checks": { "earlier_as_of_higher_multiplier": false }
+    },
+    {
+      "id": "decay-as-of-003",
+      "category": "historical_determinism",
+      "description": "Future created_at (edge case) gives multiplier = 1.0",
+      "memory_type": "event",
+      "created_at_days_from_now": 10,
+      "checks": { "multiplier_approx_one": true, "tolerance": 0.001 }
+    },
+    {
+      "id": "decay-bounded-001",
+      "category": "bounds",
+      "description": "Multiplier always in [0, 1] for all memory types and extreme ages",
+      "memory_types": ["project", "goal", "preference", "decision", "fact", "event", "other"],
+      "age_days": 3650,
+      "checks": { "all_in_zero_one": true }
+    },
+    {
+      "id": "decay-bounded-002",
+      "category": "bounds",
+      "description": "Effective importance always in [0, 1]",
+      "memory_type": "event",
+      "stored_importance": 1.0,
+      "age_days": 3650,
+      "reinforcement_count": 100,
+      "checks": { "effective_in_zero_one": true }
+    },
+    {
+      "id": "decay-ranking-001",
+      "category": "ranking_regression",
+      "description": "Old but highly semantically relevant project beats new irrelevant event",
+      "memories": [
+        {"type": "project", "importance": 0.8, "age_days": 180, "semantic_score": 0.9},
+        {"type": "event",   "importance": 0.8, "age_days": 0,   "semantic_score": 0.1}
+      ],
+      "checks": { "first_wins": true }
+    },
+    {
+      "id": "decay-ranking-002",
+      "category": "ranking_regression",
+      "description": "Decay-adjusted old event loses to fresh event with same semantic score",
+      "memories": [
+        {"type": "event", "importance": 0.8, "age_days": 60, "semantic_score": 0.7},
+        {"type": "event", "importance": 0.8, "age_days": 0,  "semantic_score": 0.7}
+      ],
+      "checks": { "first_wins": false }
+    },
+    {
+      "id": "decay-ranking-003",
+      "category": "ranking_regression",
+      "description": "Slow-decay project beats fast-decay event at same age (60d) — M5 recency favors new events so this only holds at 0-day age comparison",
+      "memories": [
+        {"type": "project", "importance": 0.8, "age_days": 60, "semantic_score": 0.5},
+        {"type": "event",   "importance": 0.8, "age_days": 60,  "semantic_score": 0.5}
+      ],
+      "checks": { "first_wins": true }
+    },
+    {
+      "id": "decay-reinforcement-001",
+      "category": "reinforcement_modifier",
+      "description": "Reinforcement modifier is bounded — cannot push effective importance above 1.0",
+      "memory_type": "project",
+      "stored_importance": 1.0,
+      "age_days": 0,
+      "reinforcement_count": 1000,
+      "checks": { "effective_in_zero_one": true }
+    },
+    {
+      "id": "decay-reinforcement-002",
+      "category": "reinforcement_modifier",
+      "description": "Zero reinforcement gives modifier of 1.0",
+      "reinforcement_count": 0,
+      "checks": { "modifier_is_one": true }
+    }
+  ]
+}

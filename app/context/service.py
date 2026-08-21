@@ -33,6 +33,7 @@ def _config_from_request(req: ContextRequest) -> ContextConfig:
         weight_type_relevance=settings.context_weight_type_relevance,
         weight_reinforcement=settings.context_weight_reinforcement,
         recency_lambda=settings.context_recency_lambda,
+        decay_enabled=settings.decay_enabled,
     )
 
 

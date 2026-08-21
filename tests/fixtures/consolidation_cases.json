@@ -1,0 +1,286 @@
+{
+  "description": "M6 Consolidation evaluation fixture",
+  "version": "1",
+  "cases": [
+    {
+      "id": "consol-basic-001",
+      "category": "consolidation_success",
+      "description": "3 related project memories consolidate into 1 derived memory",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin.", "type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin supports semantic retrieval.", "type": "fact", "importance": 0.8, "status": "active"},
+        {"content": "Munin supports memory admission.", "type": "fact", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "source_count": 3, "no_unsupported_facts": true }
+    },
+    {
+      "id": "consol-basic-002",
+      "category": "consolidation_success",
+      "description": "5 milestone facts consolidate into 1 summary",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "M0 Durable Memory Foundation is complete.", "type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M1 Semantic Retrieval is complete.", "type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M2 Memory Admission is complete.", "type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M3 Deduplication is complete.", "type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M4 Temporal Memory is complete.", "type": "fact", "importance": 0.85, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "source_count": 5, "no_unsupported_facts": true }
+    },
+    {
+      "id": "consol-basic-003",
+      "category": "consolidation_success",
+      "description": "3 architecture decisions consolidate",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses FastAPI for the REST API.", "type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses PostgreSQL for persistence.", "type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses SQLAlchemy as the ORM.", "type": "decision", "importance": 0.75, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "source_count": 3, "no_unsupported_facts": true }
+    },
+    {
+      "id": "consol-source-preserved-001",
+      "category": "source_preservation",
+      "description": "All source memories remain active and unchanged after consolidation",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin project.", "type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin is a memory agent system.", "type": "fact", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses FastAPI framework.", "type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "sources_active": true, "sources_content_unchanged": true }
+    },
+    {
+      "id": "consol-provenance-001",
+      "category": "provenance",
+      "description": "Consolidated memory links back to all source IDs",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin memory fact one.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin memory fact two.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin memory fact three.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "provenance_source_count": 3, "is_consolidated_flag": true }
+    },
+    {
+      "id": "consol-embedding-001",
+      "category": "embedding",
+      "description": "Derived memory gets an embedding",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin embedded fact one.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin embedded fact two.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin embedded fact three.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "embedding_exists": true }
+    },
+    {
+      "id": "consol-namespace-001",
+      "category": "namespace_isolation",
+      "description": "Memory from wrong namespace rejected",
+      "namespace": "eval-ns-a",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Memory in NS-A one.", "type": "fact", "importance": 0.7, "status": "active", "namespace": "eval-ns-a"},
+        {"content": "Memory in NS-B one.", "type": "fact", "importance": 0.7, "status": "active", "namespace": "eval-ns-b"},
+        {"content": "Memory in NS-A two.", "type": "fact", "importance": 0.7, "status": "active", "namespace": "eval-ns-a"}
+      ],
+      "checks": { "should_fail": true, "namespace_leak": false }
+    },
+    {
+      "id": "consol-user-001",
+      "category": "user_isolation",
+      "description": "Memory from wrong user rejected",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User1 memory one.", "type": "fact", "importance": 0.7, "status": "active", "user_id": "eval-user-1"},
+        {"content": "User2 memory one.", "type": "fact", "importance": 0.7, "status": "active", "user_id": "eval-user-2"},
+        {"content": "User1 memory two.", "type": "fact", "importance": 0.7, "status": "active", "user_id": "eval-user-1"}
+      ],
+      "checks": { "should_fail": true, "user_leak": false }
+    },
+    {
+      "id": "consol-superseded-001",
+      "category": "superseded_exclusion",
+      "description": "Superseded source rejected",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Active memory one.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Superseded memory.", "type": "fact", "importance": 0.7, "status": "superseded"},
+        {"content": "Active memory two.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "should_fail": true }
+    },
+    {
+      "id": "consol-contradiction-001",
+      "category": "contradiction_safety",
+      "description": "Conflicting preferences refused — no merged memory created",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User prefers Python.", "type": "preference", "importance": 0.8, "status": "active"},
+        {"content": "User prefers Rust.", "type": "preference", "importance": 0.8, "status": "active"},
+        {"content": "User prefers Go.", "type": "preference", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "should_fail": true, "contradiction_merge": false }
+    },
+    {
+      "id": "consol-contradiction-002",
+      "category": "contradiction_safety",
+      "description": "Conflicting use statements refused",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses SQLite.", "type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin does not use SQLite.", "type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses PostgreSQL.", "type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "should_fail": true, "contradiction_merge": false }
+    },
+    {
+      "id": "consol-idempotent-001",
+      "category": "idempotency",
+      "description": "Same source set returns same consolidated memory without duplication",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin idempotent fact A.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin idempotent fact B.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin idempotent fact C.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "repeat_count": 3,
+      "checks": { "creates_memory": true, "duplicate_count": 0 }
+    },
+    {
+      "id": "consol-preview-001",
+      "category": "preview",
+      "description": "Preview creates zero DB rows",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin preview fact A.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin preview fact B.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin preview fact C.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "preview_only": true,
+      "checks": { "no_rows_created": true }
+    },
+    {
+      "id": "consol-missing-id-001",
+      "category": "validation",
+      "description": "Nonexistent memory ID causes 422",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Real memory.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "extra_ids": ["nonexistent-id-000"],
+      "checks": { "should_fail": true }
+    },
+    {
+      "id": "consol-derived-flag-001",
+      "category": "derived_memory_identity",
+      "description": "Derived memory has is_consolidated=True in metadata",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin derived fact A.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin derived fact B.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin derived fact C.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "is_consolidated_flag": true }
+    },
+    {
+      "id": "consol-rollback-001",
+      "category": "transaction_safety",
+      "description": "Provider failure produces no partial state",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin rollback fact A.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin rollback fact B.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin rollback fact C.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "simulate_provider_failure": true,
+      "checks": { "no_partial_state": true }
+    },
+    {
+      "id": "consol-persistence-001",
+      "category": "restart_persistence",
+      "description": "Consolidated memory and provenance survive session close/reopen",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin persist A.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin persist B.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Munin persist C.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "survives_restart": true }
+    },
+    {
+      "id": "consol-search-001",
+      "category": "retrieval_integration",
+      "description": "Derived memory can be retrieved via semantic search",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "query": "Munin memory agent system",
+      "memories": [
+        {"content": "User is building Munin agent system.", "type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin provides durable memory.", "type": "fact", "importance": 0.8, "status": "active"},
+        {"content": "Munin supports context assembly.", "type": "fact", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "derived_retrievable": true }
+    },
+    {
+      "id": "consol-user-none-001",
+      "category": "user_isolation",
+      "description": "No user_id filter consolidates memories without user scoping",
+      "namespace": "eval",
+      "user_id": null,
+      "memories": [
+        {"content": "Global memory one.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Global memory two.", "type": "fact", "importance": 0.7, "status": "active"},
+        {"content": "Global memory three.", "type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "checks": { "creates_memory": true }
+    },
+    {
+      "id": "consol-type-variety-001",
+      "category": "consolidation_success",
+      "description": "Mixed memory types consolidate — derived type reflects plurality",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin is a project.", "type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin goal is continuity.", "type": "goal", "importance": 0.85, "status": "active"},
+        {"content": "Munin uses FastAPI.", "type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "no_unsupported_facts": true }
+    },
+    {
+      "id": "consol-model-switch-001",
+      "category": "consolidation_success",
+      "description": "Model-switch continuity memories consolidate into a useful summary",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin.", "type": "project", "importance": 0.95, "status": "active"},
+        {"content": "Munin is a durable memory layer for AI agents.", "type": "project", "importance": 0.95, "status": "active"},
+        {"content": "The current milestone is M6 Decay and Consolidation.", "type": "fact", "importance": 0.9, "status": "active"},
+        {"content": "Munin uses FastAPI.", "type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Current persistence is PostgreSQL.", "type": "decision", "importance": 0.85, "status": "active"}
+      ],
+      "checks": { "creates_memory": true, "source_count": 5, "no_unsupported_facts": true }
+    }
+  ]
+}

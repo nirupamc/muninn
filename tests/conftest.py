@@ -25,6 +25,8 @@ from app.models import (  # noqa: F401
     Event,
     Memory,
     MemoryAdmission,
+    MemoryConsolidation,
+    MemoryConsolidationSource,
     MemoryDeduplicationDecision,
     MemoryEmbedding,
     MemoryReinforcement,

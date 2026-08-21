@@ -49,6 +49,24 @@ class Settings(BaseSettings):
     temporal_model: str = ""
     temporal_api_key: str = ""
 
+    # M6 — Decay
+    decay_enabled: bool = True
+    decay_lambda_none: float = 0.0
+    decay_lambda_slow: float = 0.002
+    decay_lambda_normal: float = 0.01
+    decay_lambda_fast: float = 0.05
+    decay_lambda_ephemeral: float = 0.20
+
+    # M6 — Consolidation
+    consolidation_provider: str = "deterministic"
+    consolidation_min_group_size: int = 3
+    consolidation_max_group_size: int = 10
+    consolidation_min_similarity: float = 0.60
+    consolidation_min_confidence: float = 0.75
+    consolidation_base_url: str = ""
+    consolidation_model: str = ""
+    consolidation_api_key: str = ""
+
     # M5 — Context Assembly
     context_max_candidates: int = 50
     context_default_max_memories: int = 20

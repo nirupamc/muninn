@@ -1,4 +1,20 @@
-"""Hybrid ranking signals for context assembly."""
+"""Hybrid ranking signals for context assembly.
+
+M6 decay integration
+--------------------
+When ``decay_enabled=True`` on ``ContextConfig``, the ``importance`` component
+of the ranking formula uses **effective importance** (stored_importance × decay
+multiplier) rather than raw stored importance.
+
+This means memories whose type decays quickly (events, ephemeral) lose relevance
+with age, while project / goal / preference memories retain relevance longer.
+
+Stored importance is NEVER mutated by this path.
+The M5 recency signal (small ``exp(-λ*age)`` factor) is kept as a *separate*
+short-range query-time signal — it is NOT the same as the decay multiplier.
+Both signals together avoid double-penalising old memories more than intended:
+decay acts on the importance component; recency acts on its own small component.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +22,7 @@ import math
 from datetime import datetime
 
 from app.context.models import ContextConfig, ReasonCode, ScoredCandidate
+from app.decay.calculator import compute_effective_importance
 from app.models.memory import Memory, MemoryType
 
 
@@ -149,13 +166,40 @@ def score_candidate(
     as_of: datetime,
     config: ContextConfig,
 ) -> ScoredCandidate:
-    """Score one memory candidate for context ranking."""
+    """Score one memory candidate for context ranking.
+
+    When ``config.decay_enabled`` is True, the importance component uses
+    effective_importance = stored_importance × decay_multiplier × reinforcement_modifier.
+
+    The reinforcement signal in the final_score formula is then computed
+    from the remaining M5 reinforcement score (log-based boost separate from
+    the decay reinforcement modifier — they serve different roles: the decay
+    modifier boosts the decayed importance fractionally; the M5 reinforcement
+    score is a standalone small bonus).
+
+    Stored importance is NEVER written back.
+    """
     recency = compute_recency_score(memory.created_at, as_of, lambda_=config.recency_lambda)
     type_rel = compute_type_relevance(query, memory.memory_type)
     reinforcement = compute_reinforcement_score(reinforcement_count)
+
+    if config.decay_enabled:
+        from app.config import get_settings
+        settings = get_settings()
+        importance_for_ranking = compute_effective_importance(
+            stored_importance=memory.importance,
+            memory_type=memory.memory_type,
+            created_at=memory.created_at,
+            as_of=as_of,
+            reinforcement_count=reinforcement_count,
+            settings=settings,
+        )
+    else:
+        importance_for_ranking = memory.importance
+
     final = compute_final_score(
         semantic_score=semantic_score,
-        importance=memory.importance,
+        importance=importance_for_ranking,
         confidence=memory.confidence,
         recency_score=recency,
         type_relevance=type_rel,
@@ -164,7 +208,7 @@ def score_candidate(
     )
     codes = build_reason_codes(
         semantic_score=semantic_score,
-        importance=memory.importance,
+        importance=importance_for_ranking,
         recency_score=recency,
         type_relevance=type_rel,
         reinforcement_score=reinforcement,
@@ -172,7 +216,7 @@ def score_candidate(
     return ScoredCandidate(
         memory=memory,
         semantic_score=round(semantic_score, 6),
-        importance=memory.importance,
+        importance=round(importance_for_ranking, 6),   # effective, not stored
         confidence=memory.confidence,
         recency_score=round(recency, 6),
         type_relevance=round(type_rel, 6),
