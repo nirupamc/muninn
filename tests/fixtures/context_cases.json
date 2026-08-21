@@ -1,0 +1,609 @@
+{
+  "description": "M5 Context Assembly evaluation fixture",
+  "version": "1",
+  "cases": [
+    {
+      "id": "proj-001",
+      "category": "project_continuation",
+      "description": "Basic project continuation query returns Munin-related memories",
+      "query": "Continue helping me build Munin.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin.", "memory_type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin is a durable memory layer for AI agents.", "memory_type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin uses FastAPI.", "memory_type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "User ate pizza today.", "memory_type": "event", "importance": 0.2, "status": "active"}
+      ],
+      "expected_top_k": ["User is building Munin.", "Munin is a durable memory layer for AI agents.", "Munin uses FastAPI."],
+      "expected_excluded": ["User ate pizza today."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["User is building Munin.", "Munin is a durable memory layer for AI agents."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "proj-002",
+      "category": "project_continuation",
+      "description": "Architecture query surfaces tech stack memories",
+      "query": "What technology stack is Munin using?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses FastAPI.", "memory_type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Munin uses PostgreSQL for persistence.", "memory_type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Munin is written in Python.", "memory_type": "fact", "importance": 0.8, "status": "active"},
+        {"content": "User prefers dark mode in the editor.", "memory_type": "preference", "importance": 0.3, "status": "active"}
+      ],
+      "expected_top_k": ["Munin uses FastAPI.", "Munin uses PostgreSQL for persistence.", "Munin is written in Python."],
+      "expected_excluded": ["User prefers dark mode in the editor."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["Munin uses FastAPI.", "Munin uses PostgreSQL for persistence."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "goal-001",
+      "category": "goals",
+      "description": "Goal query returns project goals",
+      "query": "What are the goals for Munin?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin should preserve context when switching LLMs.", "memory_type": "goal", "importance": 0.95, "status": "active"},
+        {"content": "Munin must be local-first and privacy-preserving.", "memory_type": "goal", "importance": 0.9, "status": "active"},
+        {"content": "Munin should support multiple agents per namespace.", "memory_type": "goal", "importance": 0.8, "status": "active"},
+        {"content": "User bought a new keyboard.", "memory_type": "event", "importance": 0.1, "status": "active"}
+      ],
+      "expected_top_k": [
+        "Munin should preserve context when switching LLMs.",
+        "Munin must be local-first and privacy-preserving.",
+        "Munin should support multiple agents per namespace."
+      ],
+      "expected_excluded": ["User bought a new keyboard."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["Munin should preserve context when switching LLMs.", "Munin must be local-first and privacy-preserving."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "decision-001",
+      "category": "decisions",
+      "description": "Decision query returns current architectural decisions",
+      "query": "What decisions have been made for the Munin architecture?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses FastAPI for the REST API.", "memory_type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Munin uses SQLAlchemy as the ORM.", "memory_type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Alembic is used for database migrations.", "memory_type": "decision", "importance": 0.75, "status": "active"},
+        {"content": "User had coffee this morning.", "memory_type": "event", "importance": 0.1, "status": "active"}
+      ],
+      "expected_top_k": ["Munin uses FastAPI for the REST API.", "Munin uses SQLAlchemy as the ORM.", "Alembic is used for database migrations."],
+      "expected_excluded": ["User had coffee this morning."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["Munin uses FastAPI for the REST API.", "Munin uses SQLAlchemy as the ORM."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "pref-001",
+      "category": "preferences",
+      "description": "Preference query returns user preferences",
+      "query": "What does the user prefer for AI infrastructure?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User prefers local-first AI infrastructure.", "memory_type": "preference", "importance": 0.8, "status": "active"},
+        {"content": "User prefers open-source models over proprietary APIs.", "memory_type": "preference", "importance": 0.75, "status": "active"},
+        {"content": "User ate a salad for lunch.", "memory_type": "event", "importance": 0.1, "status": "active"}
+      ],
+      "expected_top_k": ["User prefers local-first AI infrastructure.", "User prefers open-source models over proprietary APIs."],
+      "expected_excluded": ["User ate a salad for lunch."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["User prefers local-first AI infrastructure.", "User prefers open-source models over proprietary APIs."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "noise-001",
+      "category": "noise",
+      "description": "Highly important but unrelated memory must not beat strongly relevant memory",
+      "query": "Continue building Munin memory system.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin memory system.", "memory_type": "project", "importance": 0.5, "status": "active"},
+        {"content": "User ate pizza for dinner.", "memory_type": "event", "importance": 1.0, "status": "active"}
+      ],
+      "expected_top_k": ["User is building Munin memory system."],
+      "expected_excluded": ["User ate pizza for dinner."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["User is building Munin memory system."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "noise-002",
+      "category": "noise",
+      "description": "Multiple noise memories do not overwhelm a relevant memory",
+      "query": "Munin agent memory layer project.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin is a durable memory layer for agents.", "memory_type": "project", "importance": 0.7, "status": "active"},
+        {"content": "User watched a movie last night.", "memory_type": "event", "importance": 0.3, "status": "active"},
+        {"content": "User went for a walk in the park.", "memory_type": "event", "importance": 0.3, "status": "active"},
+        {"content": "User had lunch with a friend.", "memory_type": "event", "importance": 0.3, "status": "active"}
+      ],
+      "expected_top_k": ["Munin is a durable memory layer for agents."],
+      "token_budget": 1500,
+      "checks": {
+        "top1_matches_any_of": ["Munin is a durable memory layer for agents."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "superseded-001",
+      "category": "superseded_current",
+      "description": "Superseded memory excluded by default; active replacement included",
+      "query": "What database does Munin use?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses SQLite.", "memory_type": "decision", "importance": 0.8, "status": "superseded"},
+        {"content": "Munin uses PostgreSQL.", "memory_type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "expected_top_k": ["Munin uses PostgreSQL."],
+      "expected_excluded": ["Munin uses SQLite."],
+      "token_budget": 1500,
+      "checks": {
+        "superseded_leak": false,
+        "top1_matches_any_of": ["Munin uses PostgreSQL."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "superseded-002",
+      "category": "superseded_current",
+      "description": "include_superseded=true allows superseded memory to participate",
+      "query": "What database does Munin use?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "include_superseded": true,
+      "memories": [
+        {"content": "Munin uses SQLite.", "memory_type": "decision", "importance": 0.8, "status": "superseded"},
+        {"content": "Munin uses PostgreSQL.", "memory_type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "expected_top_k": ["Munin uses PostgreSQL.", "Munin uses SQLite."],
+      "token_budget": 1500,
+      "checks": {
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "superseded-003",
+      "category": "superseded_current",
+      "description": "Multiple superseded memories all excluded by default",
+      "query": "What LLM provider does Munin use?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin uses OpenAI API.", "memory_type": "decision", "importance": 0.8, "status": "superseded"},
+        {"content": "Munin uses Anthropic API.", "memory_type": "decision", "importance": 0.8, "status": "superseded"},
+        {"content": "Munin uses local Ollama models.", "memory_type": "decision", "importance": 0.85, "status": "active"}
+      ],
+      "expected_top_k": ["Munin uses local Ollama models."],
+      "expected_excluded": ["Munin uses OpenAI API.", "Munin uses Anthropic API."],
+      "token_budget": 1500,
+      "checks": {
+        "superseded_leak": false,
+        "top1_matches_any_of": ["Munin uses local Ollama models."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "recency-001",
+      "category": "recency",
+      "description": "More recent memory ranks higher when otherwise equivalent",
+      "query": "Munin durable memory layer.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin is a durable memory layer.", "memory_type": "project", "importance": 0.7, "status": "active", "days_ago": 60},
+        {"content": "Munin is a durable memory layer.", "memory_type": "project", "importance": 0.7, "status": "active", "days_ago": 1}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "first_recency_score_gte_second": true,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "recency-002",
+      "category": "recency",
+      "description": "Very old memory has low recency score",
+      "query": "Munin memory system project.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin memory system is being built.", "memory_type": "project", "importance": 0.7, "status": "active", "days_ago": 180}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "max_recency_score_lt": 0.5,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "redundancy-001",
+      "category": "redundancy",
+      "description": "Near-identical memories do not both appear in context",
+      "query": "User building Munin memory agent system.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin memory agent system.", "memory_type": "project", "importance": 0.8, "status": "active"},
+        {"content": "User is building Munin memory agent system.", "memory_type": "project", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "max_memories_used": 1,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "redundancy-002",
+      "category": "redundancy",
+      "description": "Diverse memories all included; only true duplicates suppressed",
+      "query": "Munin memory agent system.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin memory agent system.", "memory_type": "project", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses FastAPI for the REST interface.", "memory_type": "decision", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "min_memories_used": 1,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "budget-001",
+      "category": "budget_pressure",
+      "description": "Token budget is never exceeded with many memories",
+      "query": "Munin memory agent facts.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin memory agent fact one.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact two.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact three.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact four.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact five.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact six.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact seven.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact eight.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact nine.", "memory_type": "fact", "importance": 0.5, "status": "active"},
+        {"content": "Munin memory agent fact ten.", "memory_type": "fact", "importance": 0.5, "status": "active"}
+      ],
+      "token_budget": 200,
+      "checks": {
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "budget-002",
+      "category": "budget_pressure",
+      "description": "Tiny budget returns valid empty response without exception",
+      "query": "Munin memory agent.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "token_budget": 1,
+      "checks": {
+        "budget_ok": true,
+        "no_exception": true
+      }
+    },
+    {
+      "id": "budget-003",
+      "category": "budget_pressure",
+      "description": "Moderate budget selects only fitting memories",
+      "query": "Munin memory system.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin is a durable memory layer for AI agents.", "memory_type": "project", "importance": 0.9, "status": "active"},
+        {"content": "Munin uses FastAPI.", "memory_type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses PostgreSQL.", "memory_type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses SQLAlchemy.", "memory_type": "decision", "importance": 0.75, "status": "active"},
+        {"content": "Munin uses Alembic for migrations.", "memory_type": "decision", "importance": 0.7, "status": "active"}
+      ],
+      "token_budget": 80,
+      "checks": {
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "namespace-001",
+      "category": "namespace_isolation",
+      "description": "Memories from other namespace do not appear",
+      "query": "Continue building Munin.",
+      "namespace": "personal",
+      "user_id": "eval-user-1",
+      "other_namespace_memories": [
+        {"namespace": "work", "content": "Work project uses a different framework.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "memories": [
+        {"content": "User is building Munin.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "namespace_leak": false,
+        "top1_matches_any_of": ["User is building Munin."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "namespace-002",
+      "category": "namespace_isolation",
+      "description": "Empty namespace returns no memories from other namespaces",
+      "query": "Munin memory agent.",
+      "namespace": "empty_namespace_xyz",
+      "user_id": "eval-user-1",
+      "memories": [],
+      "other_namespace_memories": [
+        {"namespace": "personal", "content": "User is building Munin.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "namespace_leak": false,
+        "memories_used_count": 0,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "user-001",
+      "category": "user_isolation",
+      "description": "Memories from other user do not appear",
+      "query": "Continue building Munin.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "other_user_memories": [
+        {"user_id": "eval-user-2", "content": "User 2 is building a different project.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "memories": [
+        {"content": "User 1 is building Munin.", "memory_type": "project", "importance": 0.9, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "user_leak": false,
+        "top1_matches_any_of": ["User 1 is building Munin."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "user-002",
+      "category": "user_isolation",
+      "description": "No user_id filter returns memories for all users in namespace",
+      "query": "Munin memory project.",
+      "namespace": "eval",
+      "user_id": null,
+      "memories": [
+        {"user_id": "eval-user-1", "content": "User 1 works on Munin memory project.", "memory_type": "project", "importance": 0.8, "status": "active"},
+        {"user_id": "eval-user-2", "content": "User 2 contributes to Munin memory project.", "memory_type": "project", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "min_memories_used": 1,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "contradiction-001",
+      "category": "contradictions",
+      "description": "Two contradicting active preferences represented as conflict",
+      "query": "What programming language does the user prefer?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User prefers Python.", "memory_type": "preference", "importance": 0.8, "status": "active"},
+        {"content": "User prefers Rust.", "memory_type": "preference", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "temporal_relationships": [
+        {"matched_content": "User prefers Python.", "created_content": "User prefers Rust.", "relationship": "CONTRADICTS"}
+      ],
+      "checks": {
+        "conflict_represented": true,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "type-filter-001",
+      "category": "type_filter",
+      "description": "memory_types filter restricts to requested types",
+      "query": "Munin Python project preferences.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memory_types_filter": ["project"],
+      "memories": [
+        {"content": "User is building Munin project.", "memory_type": "project", "importance": 0.8, "status": "active"},
+        {"content": "User prefers Python for Munin project.", "memory_type": "preference", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "all_types_match": "project",
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "type-filter-002",
+      "category": "type_filter",
+      "description": "Multiple types filter includes all requested types",
+      "query": "Munin project decisions.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memory_types_filter": ["project", "decision"],
+      "memories": [
+        {"content": "User is building Munin project.", "memory_type": "project", "importance": 0.8, "status": "active"},
+        {"content": "Munin uses FastAPI decision.", "memory_type": "decision", "importance": 0.8, "status": "active"},
+        {"content": "User prefers Python preference.", "memory_type": "preference", "importance": 0.8, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "all_types_in": ["project", "decision"],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "model-switch-001",
+      "category": "model_switch_continuity",
+      "description": "Agent B can understand state from Agent A via assembled context",
+      "query": "Continue from where we left off on Munin.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "User is building Munin.", "memory_type": "project", "importance": 0.95, "status": "active"},
+        {"content": "Munin is a durable memory layer for AI agents.", "memory_type": "project", "importance": 0.95, "status": "active"},
+        {"content": "M0 through M4.1 are complete.", "memory_type": "fact", "importance": 0.9, "status": "active"},
+        {"content": "The current milestone is M5 Context Assembly.", "memory_type": "fact", "importance": 0.95, "status": "active"},
+        {"content": "Munin uses FastAPI.", "memory_type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Current persistence is PostgreSQL.", "memory_type": "decision", "importance": 0.85, "status": "active"},
+        {"content": "Do not build the frontend yet.", "memory_type": "decision", "importance": 0.9, "status": "active"},
+        {"content": "User ate pizza today.", "memory_type": "event", "importance": 0.2, "status": "active"}
+      ],
+      "expected_top_k": [
+        "User is building Munin.",
+        "Munin is a durable memory layer for AI agents.",
+        "The current milestone is M5 Context Assembly.",
+        "Munin uses FastAPI.",
+        "Current persistence is PostgreSQL."
+      ],
+      "expected_excluded": ["User ate pizza today."],
+      "token_budget": 2000,
+      "checks": {
+        "top1_matches_any_of": ["User is building Munin.", "Munin is a durable memory layer for AI agents.", "The current milestone is M5 Context Assembly."],
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "temporal-001",
+      "category": "temporal_validity",
+      "description": "Future memory not valid at as_of is excluded",
+      "query": "Munin future planned feature.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin future planned feature.", "memory_type": "project", "importance": 0.8, "status": "active", "valid_from_days_from_now": 10}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "memories_used_count": 0,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "temporal-002",
+      "category": "temporal_validity",
+      "description": "Expired memory not valid at as_of is excluded",
+      "query": "Munin expired temporary feature.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin expired temporary feature.", "memory_type": "project", "importance": 0.8, "status": "active", "valid_until_days_ago": 5}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "memories_used_count": 0,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "temporal-003",
+      "category": "temporal_validity",
+      "description": "Memory valid within window is included",
+      "query": "Munin active window memory.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin active window memory in use.", "memory_type": "project", "importance": 0.8, "status": "active", "valid_from_days_ago": 5, "valid_until_days_from_now": 10}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "min_memories_used": 1,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "deterministic-001",
+      "category": "deterministic_ordering",
+      "description": "Same query+as_of produces same memory order on repeated calls",
+      "query": "Munin agent memory facts.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin agent memory fact one.", "memory_type": "fact", "importance": 0.6, "status": "active"},
+        {"content": "Munin agent memory fact two.", "memory_type": "fact", "importance": 0.65, "status": "active"},
+        {"content": "Munin agent memory fact three.", "memory_type": "fact", "importance": 0.7, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "deterministic": true,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "read-only-001",
+      "category": "read_only",
+      "description": "Context assembly does not mutate any memory fields",
+      "query": "Munin durable memory system.",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "Munin durable memory system.", "memory_type": "project", "importance": 0.7, "status": "active"}
+      ],
+      "token_budget": 1500,
+      "checks": {
+        "read_only": true,
+        "budget_ok": true
+      }
+    },
+    {
+      "id": "milestone-summary-001",
+      "category": "project_continuation",
+      "description": "Milestone status query returns milestone fact memories",
+      "query": "What milestones has Munin completed?",
+      "namespace": "eval",
+      "user_id": "eval-user-1",
+      "memories": [
+        {"content": "M0 Durable Memory Foundation is complete.", "memory_type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M1 Semantic Retrieval is complete.", "memory_type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M2 Memory Admission is complete.", "memory_type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M3 Deduplication and Reinforcement is complete.", "memory_type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "M4 Contradiction and Temporal Memory is complete.", "memory_type": "fact", "importance": 0.85, "status": "active"},
+        {"content": "User ate a sandwich.", "memory_type": "event", "importance": 0.1, "status": "active"}
+      ],
+      "expected_top_k": [
+        "M0 Durable Memory Foundation is complete.",
+        "M1 Semantic Retrieval is complete.",
+        "M2 Memory Admission is complete."
+      ],
+      "expected_excluded": ["User ate a sandwich."],
+      "token_budget": 1500,
+      "checks": {
+        "budget_ok": true
+      }
+    }
+  ]
+}

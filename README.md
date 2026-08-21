@@ -10,7 +10,8 @@ Munin stores durable memory so different LLMs and agents can share context acros
 **M1 — Semantic Retrieval** ✅  
 **M2 — Memory Admission** ✅  
 **M3 — Deduplication & Reinforcement** ✅  
-**M4 — Contradiction + Temporal Memory** ✅
+**M4 — Contradiction + Temporal Memory** ✅  
+**M5 — Context Assembly** ✅
 
 | Concept | Meaning |
 |---------|---------|
@@ -409,6 +410,7 @@ pytest
 python -m app.admission.evaluate
 python -m app.deduplication.evaluate
 python -m app.temporal.evaluate
+python -m app.context.evaluate
 ```
 
 ## Configuration
@@ -439,6 +441,18 @@ python -m app.temporal.evaluate
 | `TEMPORAL_BASE_URL` | _(empty)_ | OpenAI-compatible base URL for temporal |
 | `TEMPORAL_MODEL` | _(empty)_ | Model name for temporal provider |
 | `TEMPORAL_API_KEY` | _(empty)_ | Optional API key |
+| `CONTEXT_MAX_CANDIDATES` | `50` | Max embedding candidates retrieved |
+| `CONTEXT_DEFAULT_MAX_MEMORIES` | `20` | Max memories returned per request |
+| `CONTEXT_WEIGHT_SEMANTIC` | `0.45` | Semantic similarity weight |
+| `CONTEXT_WEIGHT_IMPORTANCE` | `0.20` | Importance weight |
+| `CONTEXT_WEIGHT_CONFIDENCE` | `0.10` | Confidence weight |
+| `CONTEXT_WEIGHT_RECENCY` | `0.10` | Recency weight |
+| `CONTEXT_WEIGHT_TYPE_RELEVANCE` | `0.10` | Memory-type relevance weight |
+| `CONTEXT_WEIGHT_REINFORCEMENT` | `0.05` | Reinforcement signal weight |
+| `CONTEXT_REDUNDANCY_THRESHOLD` | `0.85` | Cosine threshold for diversity suppression |
+| `CONTEXT_DEFAULT_TOKEN_BUDGET` | `1500` | Default token budget per request |
+| `CONTEXT_MAX_TOKEN_BUDGET` | `20000` | Hard cap on token_budget field |
+| `CONTEXT_RECENCY_LAMBDA` | `0.05` | Exponential decay rate for recency (per day) |
 
 ## API surface
 
@@ -458,6 +472,250 @@ python -m app.temporal.evaluate
 | `POST` | `/api/v1/memories/search` | Semantic search |
 | `GET` | `/api/v1/memories/{id}/history` | Temporal history for a memory |
 | `GET/PATCH/DELETE` | `/api/v1/memories...` | Memory CRUD |
+| `POST` | `/api/v1/context` | Assemble agent context (read-only) |
+
+---
+
+## M5 — Context Assembly
+
+### What M5 does
+
+M1 semantic search retrieves memories that are *similar* to a query. M5 assembles memories that are *relevant* to an agent's current task — applying temporal filtering, hybrid ranking, contradiction awareness, diversity suppression, and token budgeting to produce LLM-ready context.
+
+```text
+POST /api/v1/context
+  ↓
+embed query (M1 embedding provider, once)
+  ↓
+retrieve candidates (namespace / user / agent / type / status filtered)
+  ↓
+temporal validity filter (valid_from / valid_until at as_of)
+  ↓
+hybrid ranking
+  ↓
+redundancy suppression
+  ↓
+token budget selection
+  ↓
+conflict detection
+  ↓
+formatted context + explainability trace
+```
+
+### Semantic search vs assembled context
+
+| | Semantic search (`POST /memories/search`) | Context assembly (`POST /context`) |
+|--|------------------------------------------|-------------------------------------|
+| Goal | Find similar memories | Assemble relevant current truth |
+| Filtering | Namespace + status | Namespace + status + temporal validity + superseded exclusion |
+| Ranking | Cosine similarity only | Hybrid (semantic + importance + confidence + recency + type + reinforcement) |
+| Output | Raw search hits + scores | Formatted context text + trace |
+| Side effects | None | None (read-only) |
+
+### Request
+
+```json
+{
+  "query": "Continue helping me build Munin.",
+  "namespace": "personal",
+  "user_id": "user-1",
+  "agent_id": null,
+  "token_budget": 1500,
+  "max_candidates": 50,
+  "max_memories": 20,
+  "memory_types": null,
+  "include_superseded": false,
+  "as_of": null
+}
+```
+
+`as_of` defaults to the current UTC time when omitted.
+
+### Response
+
+```json
+{
+  "query": "Continue helping me build Munin.",
+  "namespace": "personal",
+  "context": "Relevant durable memory:\n\n[Project]\n- User is building Munin.\n\n[Current decisions]\n- Munin uses FastAPI.\n- Current database is PostgreSQL.\n\n[Goals]\n- Munin should preserve context when switching LLMs.\n\n[Preferences]\n- User prefers local-first AI infrastructure.",
+  "token_budget": 1500,
+  "estimated_tokens": 68,
+  "truncated": false,
+  "memories_used": [
+    {
+      "memory_id": "...",
+      "memory_type": "project",
+      "content": "User is building Munin.",
+      "semantic_score": 0.9993,
+      "importance": 0.95,
+      "confidence": 1.0,
+      "recency_score": 0.998,
+      "type_relevance": 1.0,
+      "reinforcement_score": 0.0,
+      "final_score": 0.9397,
+      "estimated_tokens": 8,
+      "reason_codes": ["HIGH_SEMANTIC_RELEVANCE", "HIGH_IMPORTANCE", "RECENT", "TYPE_RELEVANT"]
+    }
+  ]
+}
+```
+
+Raw embeddings are never returned.
+
+### Hybrid ranking formula
+
+```python
+final_score = (
+    semantic_similarity * 0.45   # dominant signal
+  + importance          * 0.20
+  + confidence          * 0.10
+  + recency             * 0.10
+  + type_relevance      * 0.10
+  + reinforcement       * 0.05
+)
+```
+
+Weights are experimental and configurable. Semantic relevance is kept dominant: a high-importance but unrelated memory does not outrank a strongly relevant memory.
+
+**Recency** is computed at query time only (`exp(-λ * age_days)`, λ=0.05 by default). No importance values are changed.
+
+**Type relevance** is a small deterministic bonus. Continuation queries favour `project`, `goal`, `decision`, `procedure`, `fact`, `preference` types over `event`.
+
+**Reinforcement signal** is a bounded boost from M3 reinforcement provenance (`0 reinforcements → 0`, capped at 0.8). Repetition cannot override semantic relevance.
+
+### Current-state filtering
+
+By default only `active` memories are returned.
+
+A memory is temporally valid at `as_of` only if:
+
+```text
+(valid_from is null  OR valid_from  <= as_of)
+AND
+(valid_until is null OR valid_until >= as_of)
+```
+
+Pass `include_superseded: true` to include superseded memories in ranking.
+
+### Contradiction representation
+
+M4 may leave two active memories in unresolved contradiction. M5 detects these via temporal audit data and formats them faithfully — it does not resolve the conflict:
+
+```text
+[Unresolved conflicts]
+- User prefers Python.
+- User prefers Rust.
+```
+
+### Diversity suppression
+
+Near-duplicate memories are suppressed at selection time (cosine threshold 0.85, configurable). Memories are never deleted or merged — only withheld from the current context window.
+
+### Token budgeting
+
+Selection never exceeds `token_budget`. Memories are counted as complete units; content is not truncated mid-fact. A tiny budget returns a valid empty response rather than raising an error.
+
+Token estimates use `ceil(len(text) / 4)` — a deterministic approximation. A model-specific tokenizer can be substituted by implementing `TokenEstimator`.
+
+### Context is read-only
+
+`POST /api/v1/context` does not mutate any memory field: `content`, `importance`, `confidence`, `status`, `valid_from`, `valid_until`, `last_accessed_at`, or reinforcement counts are all unchanged.
+
+### curl example
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/context \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Continue helping me build Munin.",
+    "namespace": "personal",
+    "user_id": "user-1",
+    "token_budget": 1500
+  }'
+```
+
+### Model-switch continuity demo
+
+With these memories stored by Agent A:
+
+```text
+User is building Munin.
+Munin is a durable memory layer for AI agents.
+M0 through M4.1 are complete.
+The current milestone is M5 Context Assembly.
+Munin uses FastAPI.
+Current persistence is PostgreSQL.
+Do not build the frontend yet.
+```
+
+Agent B asking `"Continue from where we left off on Munin."` receives:
+
+```text
+Relevant durable memory:
+
+[Project]
+- User is building Munin.
+- Munin is a durable memory layer for AI agents.
+
+[Current decisions]
+- Do not build the frontend yet.
+- Munin uses FastAPI.
+- Current persistence is PostgreSQL.
+
+[Facts]
+- The current milestone is M5 Context Assembly.
+- M0 through M4.1 are complete.
+```
+
+This is sufficient for Agent B to understand what Munin is, which milestones are done, the current task, the current architecture, and the important constraint — without any shared session state.
+
+### Evaluation
+
+```bash
+python -m app.context.evaluate
+```
+
+Required safety targets:
+
+```text
+superseded_leak_count  = 0
+namespace_leak_count   = 0
+user_leak_count        = 0
+budget_violation_count = 0
+```
+
+Manual verification:
+
+```bash
+python scripts/manual_m5_verify.py
+```
+
+### M5 module layout
+
+```text
+app/context/
+├── __init__.py          — exports ContextService
+├── assembler.py         — full assembly pipeline
+├── service.py           — orchestration + ContextResponse
+├── models.py            — ScoredCandidate, SelectedMemory, ContextConfig, …
+├── scoring.py           — recency, type relevance, reinforcement, final_score
+├── budget.py            — token selection, context formatting
+├── evaluate.py          — evaluation harness (python -m app.context.evaluate)
+└── tokenization/
+    ├── base.py          — TokenEstimator ABC
+    └── simple.py        — ceil(len/4) estimator
+```
+
+### M6+ (future work)
+
+M6 will introduce **persistent memory decay and consolidation**:
+
+- Importance decay for stale memories
+- Automatic archival below a threshold
+- Episodic → semantic summarisation
+- Knowledge graph
+
+M5 recency is query-time only and does not persist any decay values. M5 does not archive or delete memories.
 
 ## Roadmap
 
@@ -468,6 +726,6 @@ python -m app.temporal.evaluate
 | **M2** | Memory Admission | ✅ |
 | **M3** | Deduplication & Reinforcement | ✅ |
 | **M4** | Contradiction + Temporal Memory | ✅ |
-| **M5** | Context Assembly | future |
+| **M5** | Context Assembly | ✅ |
 | **M6** | Decay + Consolidation | future |
 | **M7** | Agent Integrations + Graph UI | future |

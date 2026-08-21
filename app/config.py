@@ -49,6 +49,20 @@ class Settings(BaseSettings):
     temporal_model: str = ""
     temporal_api_key: str = ""
 
+    # M5 — Context Assembly
+    context_max_candidates: int = 50
+    context_default_max_memories: int = 20
+    context_weight_semantic: float = 0.45
+    context_weight_importance: float = 0.20
+    context_weight_confidence: float = 0.10
+    context_weight_recency: float = 0.10
+    context_weight_type_relevance: float = 0.10
+    context_weight_reinforcement: float = 0.05
+    context_redundancy_threshold: float = 0.85
+    context_default_token_budget: int = 1500
+    context_max_token_budget: int = 20000
+    context_recency_lambda: float = 0.05
+
 
 @lru_cache
 def get_settings() -> Settings:
