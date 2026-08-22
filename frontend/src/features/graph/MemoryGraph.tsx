@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ForceGraph2D } from "react-force-graph";
+import ForceGraph2D from "react-force-graph-2d";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useScope } from "../../lib/scope";
