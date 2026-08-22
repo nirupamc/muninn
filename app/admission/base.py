@@ -32,5 +32,12 @@ class AdmissionProvider(ABC):
         role: str,
         content: str,
         context: dict[str, Any] | None = None,
+        explicit_remember: bool = False,
     ) -> AdmissionAnalysis:
-        """Return structured candidate analyses. Never returns free-form prose alone."""
+        """Return structured candidate analyses. Never returns free-form prose alone.
+
+        ``explicit_remember`` signals that the caller explicitly requested
+        persistence (e.g., via a high-level ``remember()`` API), as opposed to
+        an ordinary conversational event. Providers may boost explicitness and
+        future utility for such calls, but privacy/triviality filters still apply.
+        """

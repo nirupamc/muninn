@@ -1,0 +1,154 @@
+{
+  "description": "M7A Agent Integration evaluation fixture",
+  "version": "1",
+  "cases": [
+    {
+      "id": "agent-continuity-001",
+      "category": "continuity",
+      "description": "Agent can recall its own remembered milestone facts",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin M0 through M6 are complete.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "query": "What milestones are complete?", "expect_contains": "M6"}
+      ]
+    },
+    {
+      "id": "agent-cross-agent-001",
+      "category": "cross_agent",
+      "description": "Agent A writes; Agent B reads the same project memory",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "qwen", "user_id": "user-1", "content": "Next task is M7 agent integration.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "deepseek", "user_id": "user-1", "query": "Continue the Munin project.", "expect_contains": "agent integration"}
+      ]
+    },
+    {
+      "id": "agent-cross-agent-002",
+      "category": "cross_agent",
+      "description": "Two different agent_ids retrieve the same namespace memories",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "agent-a", "user_id": "user-1", "content": "Frontend uses a NERV-inspired visual language.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "agent-b", "user_id": "user-1", "query": "What visual direction?", "expect_contains": "NERV"}
+      ]
+    },
+    {
+      "id": "agent-model-switch-001",
+      "category": "model_switch_continuation",
+      "description": "Cross-model simulation: another model continues with assembled context",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "qwen", "user_id": "user-1", "content": "Current milestone is M7A Agent Integration.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "deepseek", "user_id": "user-1", "query": "Continue from where we left off on Munin.", "expect_contains": "M7A"}
+      ]
+    },
+    {
+      "id": "agent-namespace-isolation-001",
+      "category": "namespace_isolation",
+      "description": "Project B must not receive Project A memories",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin uses FastAPI.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:ragparser", "agent_id": "cursor", "user_id": "user-1", "query": "Munin tech stack?", "expect_absent": "FastAPI"}
+      ]
+    },
+    {
+      "id": "agent-namespace-isolation-002",
+      "category": "namespace_isolation",
+      "description": "RagParser project is not visible to Munin project context",
+      "steps": [
+        {"action": "remember", "namespace": "project:ragparser", "agent_id": "cursor", "user_id": "user-1", "content": "RagParser uses Tesseract for OCR.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "query": "OCR tooling context", "expect_absent": "Tesseract"}
+      ]
+    },
+    {
+      "id": "agent-user-isolation-001",
+      "category": "user_isolation",
+      "description": "User-2 must not read User-1 memories",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "User one private preference.", "expect_remembered": true},
+        {"action": "context", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-2", "query": "private preference", "expect_absent": "private preference"}
+      ]
+    }
+,
+    {
+      "id": "agent-idempotency-001",
+      "category": "idempotency",
+      "description": "Same idempotency key twice creates a single event/memory",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin adds agent integration.", "idempotency_key": "ik-001", "expect_remembered": true},
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin adds agent integration.", "idempotency_key": "ik-001", "expect_idempotent": true},
+        {"action": "count", "table": "events", "namespace": "project:munin", "expect": 1},
+        {"action": "count", "table": "memories", "namespace": "project:munin", "expect": 1}
+      ]
+    },
+    {
+      "id": "agent-idempotency-scope-001",
+      "category": "idempotency",
+      "description": "Same idempotency key in a different namespace is a distinct operation",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Distinct op fact.", "idempotency_key": "ik-scope", "expect_remembered": true},
+        {"action": "remember", "namespace": "project:ragparser", "agent_id": "cursor", "user_id": "user-1", "content": "Distinct op fact.", "idempotency_key": "ik-scope", "expect_idempotent": false},
+        {"action": "count", "table": "events", "namespace": "project:ragparser", "expect": 1}
+      ]
+    },
+    {
+      "id": "agent-trivial-ignored-001",
+      "category": "trivial_ignored",
+      "description": "Trivial greeting is not remembered",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "hello", "expect_remembered": false, "expect_decision": "IGNORE"}
+      ]
+    },
+    {
+      "id": "agent-durable-stored-001",
+      "category": "durable_stored",
+      "description": "A substantive fact is stored as a new memory",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "We chose PostgreSQL for Munin persistence.", "expect_remembered": true, "expect_memory_id": true},
+        {"action": "count", "table": "memories", "namespace": "project:munin", "expect": 1}
+      ]
+    },
+    {
+      "id": "agent-duplicate-001",
+      "category": "duplicate",
+      "description": "Repeated paraphrase does not create a duplicate memory",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin uses SQLite for its store.", "expect_remembered": true, "expect_dedup": "NEW"},
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin uses SQLite as the database.", "expect_remembered": true, "expect_dedup": "DUPLICATE"},
+        {"action": "count", "table": "memories", "namespace": "project:munin", "expect": 1}
+      ]
+    },
+    {
+      "id": "agent-reinforcement-001",
+      "category": "reinforcement",
+      "description": "Confirmatory restatement uses M3 reinforcement (no new memory)",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "User is building Munin.", "expect_remembered": true, "expect_dedup": "NEW"},
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Yes, still building Munin.", "expect_remembered": true, "expect_dedup": "REINFORCES"},
+        {"action": "count", "table": "memories", "namespace": "project:munin", "expect": 1}
+      ]
+    },
+    {
+      "id": "agent-temporal-switch-001",
+      "category": "temporal_switch",
+      "description": "Agent state change flows through M4 lifecycle via the wrapper",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin uses SQLite.", "expect_remembered": true, "expect_from_sqlite": true},
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "Munin switched to PostgreSQL.", "expect_temporal": "SUPERSEDES"}
+      ]
+    },
+    {
+      "id": "agent-session-provenance-001",
+      "category": "session_provenance",
+      "description": "session_id is persisted on the event",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "session_id": "sess-77", "content": "Session scoped fact.", "expect_remembered": true},
+        {"action": "check_event", "namespace": "project:munin", "agent_id": "cursor", "session_id": "sess-77", "expect_session": "sess-77"}
+      ]
+    },
+    {
+      "id": "agent-invalid-001",
+      "category": "invalid_requests",
+      "description": "Blank content is rejected",
+      "steps": [
+        {"action": "remember", "namespace": "project:munin", "agent_id": "cursor", "user_id": "user-1", "content": "   ", "expect_error": true}
+      ]
+    }
+  ]
+}

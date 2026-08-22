@@ -23,6 +23,29 @@ class EventRepository:
     def get_by_id(self, event_id: str) -> Event | None:
         return self.db.get(Event, event_id)
 
+    def find_by_idempotency_key(
+        self,
+        *,
+        namespace: str,
+        user_id: str | None,
+        agent_id: str | None,
+        key: str,
+    ) -> Event | None:
+        """Return an existing event carrying the given idempotency key.
+
+        Scoped by namespace / user / agent so retries within the same scope
+        replay the original admission instead of creating a duplicate event.
+        """
+        stmt = select(Event).where(
+            Event.namespace == namespace,
+            Event.metadata_["idempotency_key"].as_string() == key,
+        )
+        if user_id is not None:
+            stmt = stmt.where(Event.user_id == user_id)
+        if agent_id is not None:
+            stmt = stmt.where(Event.agent_id == agent_id)
+        return self.db.scalars(stmt).first()
+
     def list(
         self,
         *,

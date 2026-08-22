@@ -20,7 +20,7 @@ _NEGATION = re.compile(
 )
 
 _REINFORCE_CUES = re.compile(
-    r"(?i)\b(?:still|remains?|continue(?:s|d)?|again|as\s+always|"
+    r"(?i)\b(?:still|remains?|continue(?:s|d)?|as\s+always|"
     r"default|same)\b"
 )
 
@@ -33,6 +33,8 @@ _SYNONYM_GROUPS: list[set[str]] = [
     {"python", "py"},
     {"parser", "parsing", "parse"},
     {"document", "documents", "pdf"},
+    {"uses", "use", "using"},
+    {"store", "database", "db"},
 ]
 
 _STOP = {

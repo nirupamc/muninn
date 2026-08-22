@@ -87,7 +87,7 @@ class EmbeddingRepository:
         model_name: str,
         dimension: int,
         user_id: str | None = None,
-        agent_id: str | None = None,
+        agent_id: str | None = None,  # accepted for compatibility; not used for filtering
         memory_types: list[MemoryType] | None = None,
         statuses: list[MemoryStatus] | None = None,
     ) -> list[tuple[Memory, MemoryEmbedding]]:
@@ -95,6 +95,8 @@ class EmbeddingRepository:
         Return (memory, embedding) pairs for semantic search.
 
         Only embeddings matching the active provider/model/dimension are included.
+        Memories are scoped by namespace and user; agent_id is NOT used for filtering
+        so that agents can share memories within the same project.
         """
         stmt = (
             select(Memory, MemoryEmbedding)
@@ -106,8 +108,7 @@ class EmbeddingRepository:
         )
         if user_id is not None:
             stmt = stmt.where(Memory.user_id == user_id)
-        if agent_id is not None:
-            stmt = stmt.where(Memory.agent_id == agent_id)
+        # agent_id intentionally ignored for cross-agent sharing within namespace/user
         if memory_types:
             stmt = stmt.where(Memory.memory_type.in_(memory_types))
         if statuses:

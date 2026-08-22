@@ -27,6 +27,10 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     configure_logging(settings.log_level)
     logger.info("Munin starting (env=%s, version=%s)", settings.munin_env, __version__)
+    # Local-first: ensure schema exists on startup (idempotent).
+    from app.database import Base, engine
+
+    Base.metadata.create_all(engine)
     logger.info("database configured")
     logger.info("API ready")
     yield

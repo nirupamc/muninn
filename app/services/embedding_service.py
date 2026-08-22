@@ -113,13 +113,18 @@ class EmbeddingService:
             model_name=self.provider.model_name,
             dimension=self.provider.dimension,
             user_id=payload.user_id,
-            agent_id=payload.agent_id,
+            # agent_id intentionally ignored at repo level for cross-agent sharing;
+            # we filter in-service if explicitly requested.
+            agent_id=None,
             memory_types=payload.memory_types,
             statuses=payload.statuses,
         )
 
         scored: list[tuple[Memory, float]] = []
         for memory, embedding_row in candidates:
+            # Apply agent_id filter if requested (repo doesn't filter for cross-agent sharing)
+            if payload.agent_id is not None and memory.agent_id != payload.agent_id:
+                continue
             stored = deserialize_vector(embedding_row.embedding)
             score = cosine_similarity(query_vector, stored)
             if score >= payload.min_score:

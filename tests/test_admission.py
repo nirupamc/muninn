@@ -297,7 +297,7 @@ def test_provider_failure(client, engine, fake_provider):
         def model_name(self) -> str:
             return "boom"
 
-        def analyze_event(self, *, role: str, content: str, context: dict[str, Any] | None = None):
+        def analyze_event(self, *, role: str, content: str, context: dict[str, Any] | None = None, explicit_remember: bool = False):
             raise AdmissionError("down")
 
     from fastapi.testclient import TestClient

@@ -91,6 +91,9 @@ class AdmissionService:
 
         started = time.perf_counter()
         try:
+            explicit_remember = bool(
+                event.metadata_ and event.metadata_.get("explicit_remember") is True
+            )
             analysis = self.admission_provider.analyze_event(
                 role=event.role.value if hasattr(event.role, "value") else str(event.role),
                 content=event.content,
@@ -100,6 +103,7 @@ class AdmissionService:
                     "agent_id": event.agent_id,
                     "session_id": event.session_id,
                 },
+                explicit_remember=explicit_remember,
             )
         except AdmissionError as exc:
             logger.error(

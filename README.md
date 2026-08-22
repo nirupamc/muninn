@@ -12,7 +12,8 @@ Munin stores durable memory so different LLMs and agents can share context acros
 **M3 — Deduplication & Reinforcement** ✅  
 **M4 — Contradiction + Temporal Memory** ✅  
 **M5 — Context Assembly** ✅  
-**M6 — Decay + Consolidation** ✅
+**M6 — Decay + Consolidation** ✅  
+**M7A — Agent Integration Layer** ✅  (M7B frontend deferred)
 
 | Concept | Meaning |
 |---------|---------|
@@ -474,6 +475,8 @@ python -m app.context.evaluate
 | `GET` | `/api/v1/memories/{id}/history` | Temporal history for a memory |
 | `GET/PATCH/DELETE` | `/api/v1/memories...` | Memory CRUD |
 | `POST` | `/api/v1/context` | Assemble agent context (read-only) |
+| `POST` | `/api/v1/agent/remember` | High-level remember (event → M2/M3/M4) |
+| `POST` | `/api/v1/agent/context` | High-level agent-ready context retrieval |
 
 ---
 
@@ -944,7 +947,191 @@ alembic upgrade head
 ### Status
 
 - **M6** ✅ — Decay + Consolidation implemented, tested, and verified.
-- **M7** (future) — Agent integrations and a graph UI are not started.
+- **M7A** ✅ — Agent Integration Layer implemented, tested, and verified.
+- **M7B** (frontend) — NOT started (deferred until M7A is verified).
+
+## M7A — Agent Integration Layer
+
+M7A is the **agent-facing contract** on top of the existing engine. External agents
+interact only through two high-level operations — `remember` and `get_context` — and
+never run M2/M3/M4 directly. The `AgentService` is a thin orchestration layer that
+delegates context assembly to the existing `ContextService` (it never re-implements
+ranking).
+
+### Agent-facing architecture
+
+```text
+External Agent (Cursor / Qwen / DeepSeek / …)
+   │
+   │  MuninClient  (SDK, HTTP only — never touches the DB)
+   ▼
+POST /api/v1/agent/remember   →  AgentService.remember
+POST /api/v1/agent/context    →  AgentService.get_context
+   │
+   ▼
+Event  →  AdmissionService (M2)  →  DeduplicationService (M3)
+                                       →  TemporalService (M4)  →  Memory / Reinforcement
+                                   ContextService (M5) for get_context
+```
+
+**Scope semantics**
+
+| Field | Role | Used for access? |
+|-------|------|------------------|
+| `namespace` | Project / access scope (e.g. `project:munin`) | **Yes** — always scopes storage + retrieval |
+| `user_id` | Owner / access scope | **Yes** — scopes when provided |
+| `agent_id` | Provenance only | **No** — does NOT isolate project memory |
+| `session_id` | Provenance only (conversation/session) | No |
+| `idempotency_key` | Client-supplied dedupe key for safe retries | No (used for replay) |
+
+`agent_id` is **provenance**, not scope. Memories written by agent `qwen` are visible to
+agent `deepseek` as long as they share the same `namespace` + `user_id`. Explicit
+`agent_id` filtering remains available in low-level search for callers that want it, but
+the default project memory is shared across agents.
+
+### Remember flow
+
+```text
+client.remember(content, …)
+   → AgentService.remember  (metadata.explicit_remember = true)
+   → Event created (agent_id / session_id / idempotency_key stored as provenance)
+   → AdmissionService.admit_event
+        M2: extract candidate, privacy check, STORE/IGNORE
+        M3: DUPLICATE / REINFORCES / NEW
+        M4: NEW → SUPERSEDES / UPDATES / CONTRADICTS
+   → compact AgentRememberResponse:
+        decision, memory_id, dedup_relationship, temporal_relationship,
+        idempotent_replay
+```
+
+**Explicit remember intent.** Every `remember()` call sets `explicit_remember=true`.
+This boosts explicitness/future-utility for substantive statements so they STORE, while
+trivial chatter (`"hello"`) is still ignored and secret-like content (`"My API key is
+sk-…"`) is still ignored and redacted (`SECRET_LIKE_DATA` → `[REDACTED]`). Privacy
+thresholds are never lowered for M7A.
+
+**Reinforcement vs duplicate (M7A boundary).** Exact normalized duplicate candidates
+take a cheap DUPLICATE path and create no new memory. When the *original event* contains
+explicit confirmation language (`yes`, `still`, `remains`, `continues`, `confirmed`,
+`correct`, `exactly`, `as always`) **and** the canonical candidate is an otherwise-exact
+match, the engine escalates to the relationship provider (using the original event
+wording, which still carries the cue) and may produce **REINFORCES** — a reinforcement
+provenance row, no second canonical memory. State-change language (`switched`, `migrated`,
+`no longer`, …) is preserved as M3 NEW so M4 resolves the lifecycle. `again` is treated as
+a plain duplicate, not reinforcement.
+
+### Context flow
+
+```text
+client.get_context(query, …)
+   → AgentService.get_context → ContextService.assemble
+   → semantic retrieval (namespace + user_id scoped; agent_id optional filter)
+   → temporal validity + hybrid ranking + token budget
+   → AgentContextResponse.text  (LLM-ready context)
+```
+
+The assembled `text` is **data, not a privileged system instruction**. Integrations must
+present it as untrusted context — it must never be injected as control/instruction text.
+
+### Idempotency
+
+If the same `idempotency_key` is sent twice within the same `namespace`/`user_id`/
+`agent_id` scope, the second call replays the original admission outcome and returns
+`idempotent_replay=true` — **no second event, no duplicate memory, no duplicate audit
+rows**. This makes transport retries safe (see SDK safe-retry policy below).
+
+### SDK usage
+
+```python
+from app.sdk import MuninClient
+
+client = MuninClient(
+    base_url="http://127.0.0.1:8000",
+    namespace="project:munin",
+    user_id="user-1",
+    agent_id="cursor",
+    timeout=(5.0, 30.0),   # (connect, read) seconds
+    max_retries=2,
+)
+
+client.health()                                  # connectivity check
+ctx = client.get_context("Continue the Munin project.")   # AgentContext
+result = client.remember(
+    "Current milestone is M7A Agent Integration.",
+    session_id="session-123",
+    idempotency_key="ik-001",
+)
+if result.remembered:
+    print(result.memory_id, result.dedup_relationship)
+```
+
+The SDK talks to the HTTP API only — it never opens the database. Structured errors
+(`MuninConnectionError`, `MuninTimeoutError`, `MuninValidationError`, `MuninServerError`,
+`MuninHTTPError`) are raised instead of leaking raw `httpx` exceptions.
+
+### Error model & timeouts / retries
+
+- **Timeouts:** per-request `(connect, read)` via `httpx.Timeout`; default `(5.0, 30.0)`.
+- **Safe retries:** only *idempotent* requests are retried — `GET`/`HEAD`/`OPTIONS` and
+  writes that carry an `idempotency_key`. Non-idempotent writes are never retried.
+  Retries apply only to `502/503/504`. All other statuses fail fast with a structured
+  `MuninError` subclass.
+- **Validation:** `400/422` → `MuninValidationError`; `>=500` → `MuninServerError`.
+
+### CLI
+
+```bash
+munin-agent health   --namespace project:munin --user user-1 --agent cursor
+munin-agent context  --namespace project:munin --user user-1 --agent cursor `
+                     --query "Continue where we left off"
+munin-agent remember --namespace project:munin --user user-1 --agent cursor `
+                     --content "M7A integration verified" --session session-123
+```
+
+`munin` and `munin-agent` are aliases for the same CLI.
+
+### A → B → C continuity demo
+
+Because memory is project-scoped (not session-scoped), three different agents share
+durable context without any shared chat history:
+
+```text
+Agent A (Cursor)   remembers: M0–M6 complete; M7A is current; frontend must wait.
+Agent B (Qwen)     new session → get_context → sees all three facts.
+                   remembers: "M7A continuity verification passed."
+Agent C (DeepSeek) new session → get_context → sees the updated state.
+```
+
+### Evaluations
+
+```bash
+python -m app.agent.evaluate        # 16 cases, all safety metrics must be 0
+python -m app.admission.evaluate
+python -m app.deduplication.evaluate
+python -m app.temporal.evaluate
+python -m app.context.evaluate
+python -m app.decay.evaluate
+python -m app.consolidation.evaluate
+python scripts/manual_m7a_verify.py  # A–J + A→B→C + restart checks
+```
+
+M7A safety targets (must all be `0`):
+
+```text
+namespace_leak_count       = 0
+user_leak_count            = 0
+duplicate_event_count      = 0
+duplicate_memory_count     = 0
+idempotency_failure_count  = 0
+```
+
+### MCP status
+
+**Deferred.** No Model Context Protocol server is implemented in M7A. The HTTP API
+(`/api/v1/agent/remember`, `/api/v1/agent/context`) already provides a complete,
+provider-agnostic agent integration surface; adding an MCP server is a separate,
+optional concern that does not affect M7A's definition of done. M7A was not expanded to
+include MCP.
 
 ## Roadmap
 
@@ -957,4 +1144,5 @@ alembic upgrade head
 | **M4** | Contradiction + Temporal Memory | ✅ |
 | **M5** | Context Assembly | ✅ |
 | **M6** | Decay + Consolidation | ✅ |
-| **M7** | Agent Integrations + Graph UI | future |
+| **M7A** | Agent Integration Layer | ✅ |
+| **M7B** | Frontend (graph UI) | deferred |

@@ -18,6 +18,15 @@ _REMEMBER = re.compile(
     r"(?i)\b(?:remember(?:\s+that)?|please\s+remember|don't\s+forget|"
     r"keep\s+in\s+mind|note\s+that)\b"
 )
+# Leading confirmation filler that precedes the actual statement in an explicit
+# remember request. Stripped only from the *canonical candidate* so the stored
+# proposition is clean; reinforcement detection itself uses the original event
+# wording, not this cleaned text.
+_CONFIRM_LEAD = re.compile(
+    r"^(?:(?:yes|yeah|yep|correct|exactly|confirmed|as\s+always|right|"
+    r"still|remains?|continue(?:s|d)?)[,\s:.\-]*)+",
+    re.IGNORECASE,
+)
 _PROJECT = re.compile(
     r"(?i)\b(?:i(?:'m| am)\s+building|building|working\s+on|developing)\b"
 )
@@ -69,6 +78,7 @@ class DeterministicAdmissionProvider(AdmissionProvider):
         role: str,
         content: str,
         context: dict[str, Any] | None = None,  # noqa: ARG002
+        explicit_remember: bool = False,
     ) -> AdmissionAnalysis:
         text = (content or "").strip()
         if not text:
@@ -78,24 +88,25 @@ class DeterministicAdmissionProvider(AdmissionProvider):
         clauses = _split_clauses(text)
         candidates: list[CandidateAnalysis] = []
         for clause in clauses:
-            analysis = self._analyze_clause(clause, original=text)
+            analysis = self._analyze_clause(clause, original=text, explicit_remember=explicit_remember)
             if analysis is not None:
                 candidates.append(analysis)
 
         # If splitting produced nothing useful, analyze the whole text once.
         if not candidates:
-            analysis = self._analyze_clause(text, original=text)
+            analysis = self._analyze_clause(text, original=text, explicit_remember=explicit_remember)
             if analysis is not None:
                 candidates.append(analysis)
 
         return AdmissionAnalysis(candidates=candidates)
 
-    def _analyze_clause(self, clause: str, *, original: str) -> CandidateAnalysis | None:
+    def _analyze_clause(self, clause: str, *, original: str, explicit_remember: bool = False) -> CandidateAnalysis | None:
         clause = clause.strip(" .,;")
         if not clause:
             return None
 
-        explicit_remember = bool(_REMEMBER.search(clause) or _REMEMBER.search(original))
+        content_explicit_remember = bool(_REMEMBER.search(clause) or _REMEMBER.search(original))
+        is_explicit_remember = explicit_remember or content_explicit_remember
 
         # Food / trivial chatter
         if _TRIVIAL_FOOD.search(clause) and not _PROJECT.search(clause):
@@ -207,7 +218,7 @@ class DeterministicAdmissionProvider(AdmissionProvider):
                 content = f"{content}{details}"
             content = content.rstrip(".") + "."
             reasons = [ReasonCode.ONGOING_PROJECT, ReasonCode.HIGH_FUTURE_UTILITY]
-            if explicit_remember:
+            if is_explicit_remember:
                 reasons.append(ReasonCode.EXPLICIT_REMEMBER_REQUEST)
             return CandidateAnalysis(
                 candidate=AdmissionCandidate(
@@ -218,7 +229,7 @@ class DeterministicAdmissionProvider(AdmissionProvider):
                     future_utility=0.92,
                     stability=0.8,
                     specificity=0.85,
-                    explicitness=0.95 if explicit_remember else 0.9,
+                    explicitness=0.95 if is_explicit_remember else 0.9,
                     triviality=0.05,
                 ),
                 provider_recommendation="STORE",
@@ -310,7 +321,7 @@ class DeterministicAdmissionProvider(AdmissionProvider):
         if _PREFER.search(clause):
             content = _normalize_preference(clause)
             reasons = [ReasonCode.STABLE_PREFERENCE, ReasonCode.EXPLICIT_USER_STATEMENT]
-            if explicit_remember:
+            if is_explicit_remember:
                 reasons.append(ReasonCode.EXPLICIT_REMEMBER_REQUEST)
             return CandidateAnalysis(
                 candidate=AdmissionCandidate(
@@ -321,7 +332,7 @@ class DeterministicAdmissionProvider(AdmissionProvider):
                     future_utility=0.85,
                     stability=0.85,
                     specificity=0.75,
-                    explicitness=0.98 if explicit_remember else 0.9,
+                    explicitness=0.98 if is_explicit_remember else 0.9,
                     triviality=0.05,
                 ),
                 provider_recommendation="STORE",
@@ -370,34 +381,46 @@ class DeterministicAdmissionProvider(AdmissionProvider):
             )
 
         # Explicit remember of a generic fact
-        if explicit_remember:
+        if is_explicit_remember:
             cleaned = _REMEMBER.sub("", clause).strip(" :,.")
             cleaned = re.sub(r"(?i)^that\s+", "", cleaned).strip()
             cleaned = re.sub(r"(?i)^i\s+", "", cleaned).strip()
+            cleaned = _CONFIRM_LEAD.sub("", cleaned).strip(" :,.")
             statement = cleaned[0].upper() + cleaned[1:] if cleaned else cleaned
             if not statement.lower().startswith("user"):
                 statement = f"User {statement[0].lower() + statement[1:]}" if statement else "User fact."
             if not statement.endswith("."):
                 statement += "."
-            return CandidateAnalysis(
-                candidate=AdmissionCandidate(
-                    content=statement,
-                    memory_type=MemoryType.fact,
-                    importance=0.75,
-                    confidence=0.9,
-                    future_utility=0.75,
-                    stability=0.7,
-                    specificity=0.7,
-                    explicitness=0.98,
-                    triviality=0.1,
-                ),
-                provider_recommendation="STORE",
-                reason_codes=[
-                    ReasonCode.EXPLICIT_REMEMBER_REQUEST,
-                    ReasonCode.EXPLICIT_USER_STATEMENT,
-                ],
-                explanation="Explicit remember request",
+
+            # Triviality guard: even explicit remember requests must have substance.
+            # Very short / generic statements like "hello", "ok", "thanks" are ignored.
+            trivial_indicators = (
+                len(cleaned.split()) <= 2
+                and not re.search(r"(?i)\b(?:project|munin|ragparser|postgres|sqlite|fastapi|python|redis|tesseract|ner v|obsidian)\b", cleaned)
             )
+            if trivial_indicators:
+                # Fall through to default IGNORE
+                pass
+            else:
+                return CandidateAnalysis(
+                    candidate=AdmissionCandidate(
+                        content=statement,
+                        memory_type=MemoryType.fact,
+                        importance=0.75,
+                        confidence=0.9,
+                        future_utility=0.75,
+                        stability=0.7,
+                        specificity=0.7,
+                        explicitness=0.98,
+                        triviality=0.1,
+                    ),
+                    provider_recommendation="STORE",
+                    reason_codes=[
+                        ReasonCode.EXPLICIT_REMEMBER_REQUEST,
+                        ReasonCode.EXPLICIT_USER_STATEMENT,
+                    ],
+                    explanation="Explicit remember request",
+                )
 
         # Tech stack fact: "using SQLite"
         using = re.search(

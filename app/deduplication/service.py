@@ -20,6 +20,7 @@ from app.deduplication.models import DedupReasonCode, RelationshipType
 from app.deduplication.normalize import normalize_for_exact_match
 from app.deduplication.policy import DedupPolicyConfig, apply_relationship_policy
 from app.deduplication.state_change import contains_state_change_signal
+from app.deduplication.reinforce import contains_reinforcement_signal
 from app.embeddings.base import EmbeddingProvider
 from app.models.deduplication import MemoryDeduplicationDecision, MemoryReinforcement
 from app.models.event import Event
@@ -98,7 +99,13 @@ class DeduplicationService:
             user_id=event.user_id,
             content=content,
         )
-        if exact is not None and not contains_state_change_signal(content):
+        # If original event has reinforcement language, don't treat as exact duplicate;
+        # let it go through semantic classification to potentially become REINFORCES.
+        # This is important because the admission provider normalizes content (e.g.,
+        # "Yes, still building Munin." -> "User is building Munin."), which would
+        # otherwise match the exact duplicate path and miss the reinforcement signal.
+        is_reinforcement = contains_reinforcement_signal(event.content)
+        if exact is not None and not contains_state_change_signal(content) and not is_reinforcement:
             result = DeduplicationResult(
                 relationship=RelationshipType.DUPLICATE,
                 confidence=1.0,
@@ -165,6 +172,7 @@ class DeduplicationService:
         for memory, similarity in shortlist:
             outcome = self._classify_pair(
                 candidate=content,
+                original_event_content=event.content,
                 existing=memory,
                 candidate_type=memory_type,
             )
@@ -287,12 +295,16 @@ class DeduplicationService:
         self,
         *,
         candidate: str,
+        original_event_content: str,
         existing: Memory,
         candidate_type: MemoryType,
     ):
         try:
+            # Use original event content for classification to preserve
+            # reinforcement cues (e.g., "yes, still...") that may be lost
+            # in the normalized candidate content.
             analysis = self.relationship_provider.classify(
-                candidate=candidate,
+                candidate=original_event_content,
                 existing_memory=existing.content,
                 candidate_type=candidate_type,
                 existing_type=existing.memory_type,
