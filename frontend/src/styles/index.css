@@ -1,0 +1,293 @@
+/* ============================================================
+   MUNIN // MEMORY OPERATIONS SYSTEM — global design system
+   70% serious developer tool / 30% NERV insanity.
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --munin-bg: #000000;
+  --munin-panel: #060806;
+  --munin-panel-2: #0b0e0b;
+  --munin-border: #1c241c;
+  --munin-border-bright: #2f3d2f;
+  --munin-text: #c8d6c8;
+  --munin-muted: #5d6b5d;
+
+  --munin-green: #27e36b;
+  --munin-cyan: #22d3ee;
+  --munin-orange: #ff9d2e;
+  --munin-red: #ff3b3b;
+  --munin-purple: #a472ff;
+  --munin-amber: #ffc24b;
+
+  --status-active: #27e36b;
+  --status-superseded: #ff9d2e;
+  --status-conflict: #ff3b3b;
+  --status-consolidated: #a472ff;
+
+  --munin-font-display: "Oswald", "Arial Narrow", system-ui, sans-serif;
+  --munin-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, "Courier New", monospace;
+  --munin-font-body: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--munin-bg);
+  color: var(--munin-text);
+  font-family: var(--munin-font-body);
+  font-size: 15px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- typography helpers ---- */
+.font-display {
+  font-family: var(--munin-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.font-mono {
+  font-family: var(--munin-font-mono);
+}
+.tracking-wide-ext {
+  letter-spacing: 0.18em;
+}
+
+/* ---- surfaces ---- */
+.munin-panel {
+  background: var(--munin-panel);
+  border: 1px solid var(--munin-border);
+}
+.munin-panel-2 {
+  background: var(--munin-panel-2);
+  border: 1px solid var(--munin-border);
+}
+
+/* ---- focus / a11y ---- */
+:focus-visible {
+  outline: 1px solid var(--munin-cyan);
+  outline-offset: 1px;
+}
+
+/* ---- scrollbars ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--munin-border-bright) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--munin-border-bright);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   CRT / NERV effects — restrained, respect reduced motion
+   ============================================================ */
+.crt-scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  z-index: 50;
+  opacity: 0.5;
+}
+.crt-vignette {
+  position: relative;
+}
+.crt-vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 140px rgba(0, 0, 0, 0.85);
+  z-index: 49;
+}
+
+@keyframes munin-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.86;
+  }
+  54% {
+    opacity: 0.4;
+  }
+  58% {
+    opacity: 0.95;
+  }
+  60% {
+    opacity: 0.7;
+  }
+  62% {
+    opacity: 1;
+  }
+}
+.munin-flicker {
+  animation: munin-flicker 4s infinite;
+}
+
+@keyframes munin-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.munin-cursor::after {
+  content: "_";
+  animation: munin-blink 1s steps(1) infinite;
+  color: var(--munin-green);
+}
+
+/* phosphor text glow for healthy data */
+.glow-green {
+  color: var(--munin-green);
+  text-shadow: 0 0 6px rgba(39, 227, 107, 0.5);
+}
+.glow-cyan {
+  color: var(--munin-cyan);
+  text-shadow: 0 0 6px rgba(34, 211, 238, 0.5);
+}
+.glow-orange {
+  color: var(--munin-orange);
+  text-shadow: 0 0 6px rgba(255, 157, 46, 0.5);
+}
+.glow-red {
+  color: var(--munin-red);
+  text-shadow: 0 0 6px rgba(255, 59, 59, 0.5);
+}
+.glow-purple {
+  color: var(--munin-purple);
+  text-shadow: 0 0 6px rgba(164, 114, 255, 0.5);
+}
+
+/* status markers (compact NERV tags) */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--munin-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  line-height: 1.4;
+}
+
+/* input / control base */
+.munin-input {
+  background: #000;
+  border: 1px solid var(--munin-border-bright);
+  color: var(--munin-text);
+  font-family: var(--munin-font-mono);
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+}
+.munin-input:focus {
+  border-color: var(--munin-cyan);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.3);
+}
+
+.munin-btn {
+  font-family: var(--munin-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid var(--munin-border-bright);
+  color: var(--munin-text);
+  background: #050805;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.munin-btn:hover {
+  border-color: var(--munin-green);
+  color: var(--munin-green);
+}
+.munin-btn-active {
+  border-color: var(--munin-green);
+  color: var(--munin-green);
+  background: rgba(39, 227, 107, 0.08);
+}
+
+/* table base for explorer */
+.munin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--munin-font-mono);
+  font-size: 12px;
+}
+.munin-table th {
+  text-align: left;
+  color: var(--munin-muted);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 10px;
+  border-bottom: 1px solid var(--munin-border-bright);
+  padding: 6px 8px;
+  position: sticky;
+  top: 0;
+  background: var(--munin-panel);
+  z-index: 1;
+}
+.munin-table td {
+  border-bottom: 1px solid var(--munin-border);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.munin-row:hover td {
+  background: rgba(39, 227, 107, 0.05);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -37,6 +37,7 @@ def _get_configured_provider() -> EmbeddingProvider:
         return get_sentence_transformer_provider(
             model_name=cfg.embedding_model,
             device=cfg.embedding_device,
+            local_files_only=cfg.embedding_local_files_only,
         )
 
     raise EmbeddingError(f"Unsupported embedding provider: {cfg.embedding_provider}")

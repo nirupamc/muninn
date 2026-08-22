@@ -4,6 +4,125 @@ Standalone, local-first long-term memory layer for AI agents.
 
 Munin stores durable memory so different LLMs and agents can share context across model switches, application restarts, and new sessions.
 
+## Thesis
+
+Memory should belong to the agent system, not the LLM. Munin keeps durable,
+model-independent state behind a local-first API, then assembles relevant memory as
+explicitly untrusted data for any agent or model.
+
+## Features
+
+- Durable, namespace- and user-scoped memory with source provenance
+- Real sentence-transformer semantic retrieval, including cached offline operation
+- Admission, privacy filtering, deduplication, and reinforcement provenance
+- Temporal truth through `UPDATES`, `SUPERSEDES`, and unresolved `CONTRADICTS`
+- Backend-authoritative context ranking, explainability traces, and token budgeting
+- Non-mutating decay, explicit consolidation, and relational source provenance
+- Cross-agent continuity through REST, synchronous Python SDK, and CLI
+- Operations UI with Overview, Explorer, canonical Inspector, Graph, Context Preview,
+  Timeline, and Conflict Center
+
+## Frontend
+
+The React/Vite UI is an observability and debugging console, not a second reasoning
+engine. It visualizes backend records without reimplementing admission, ranking,
+temporal, decay, or consolidation semantics.
+
+| Route | Screen |
+|-------|--------|
+| `/overview` | Health, lifecycle inventory, recent activity, scopes, provenance |
+| `/memories` | Searchable/filterable memory Explorer and canonical Inspector |
+| `/graph` | Real temporal and consolidation relationship network |
+| `/context` | Exact M5 context, selected memories, trace, and graph overlay |
+| `/timeline` | Backend-linked temporal chains and validity history |
+| `/conflicts` | Read-only real `CONTRADICTS` comparisons |
+| `/projects`, `/agents`, `/status` | Scope, provenance, and service diagnostics |
+
+## Quick start
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+Copy-Item .env.example .env
+alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+In a second terminal:
+
+```powershell
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`.
+
+## Portfolio demo
+
+With the backend running, seed the repeatable dataset through the normal agent API:
+
+```powershell
+python scripts/seed_demo.py
+```
+
+The script uses the dedicated `demo:munin` namespace, stable idempotency keys, real
+event → admission → dedup → temporal processing, idempotent consolidation, and
+cross-agent context retrieval. It prints actual counts and verification outcomes.
+
+Recommended walkthrough:
+
+1. Select `demo:munin` in the sidebar and inspect lifecycle counts on Overview.
+2. Search `PostgreSQL` in Explorer and open its temporal/source provenance.
+3. Inspect real supersession, contradiction, and consolidation edges in Graph.
+4. Assemble `Continue working on Munin.` in Context Preview, then use View in Graph
+   and Why Selected.
+5. Inspect the replacement chain in Timeline and unresolved pair in Conflict Center.
+
+Suggested capture set: Overview, Memory Graph, Context Preview, Timeline, and Conflict
+Center. Screenshots are intentionally not committed by the seed script.
+
+## Offline embeddings
+
+Download the configured model once during setup. Cached normal runs are local-first.
+To require strict network-independent loading:
+
+```powershell
+$env:EMBEDDING_LOCAL_FILES_ONLY='true'
+$env:HF_HUB_OFFLINE='1'
+$env:TRANSFORMERS_OFFLINE='1'
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Munin fails clearly if strict local mode is enabled and the real model is unavailable;
+it never silently substitutes fake embeddings.
+
+## Security and identity scopes
+
+Memory context is data, not trusted instruction or a privileged system prompt.
+Admission rejects or redacts supported secret-like inputs before durable storage.
+
+| Field | Meaning |
+|-------|---------|
+| `namespace` | Project or memory scope |
+| `user_id` | Ownership/access isolation scope |
+| `agent_id` | Writer provenance by default, not access control |
+| `session_id` | Working-session provenance; not durable-memory isolation |
+
+## Known limitations
+
+- Temporal and conflict screens load per-memory history with bounded concurrency because
+  no global temporal-read endpoint exists.
+- The Graph renders at most the selected node limit and labels truncation explicitly.
+- No clean reinforcement relationship read endpoint exists, so Graph does not fabricate
+  reinforcement edges.
+- M5 does not expose skipped candidate records or structured conflict pairs.
+- `react-force-graph` keeps the lazy Graph route chunk above Vite's 500 kB advisory;
+  other large screens are route-split and the warning is non-blocking.
+- The deterministic M4 evaluation retains one known missed-supersede case while
+  `false_supersede_count` and `false_contradiction_count` remain zero.
+- MCP is intentionally not implemented in M7B.
+
 ## Current status
 
 **M0 — Durable Memory Foundation** ✅  
@@ -13,7 +132,8 @@ Munin stores durable memory so different LLMs and agents can share context acros
 **M4 — Contradiction + Temporal Memory** ✅  
 **M5 — Context Assembly** ✅  
 **M6 — Decay + Consolidation** ✅  
-**M7A — Agent Integration Layer** ✅  (M7B frontend deferred)
+**M7A — Agent Integration Layer** ✅
+**M7B — Memory Operations Frontend** ✅
 
 | Concept | Meaning |
 |---------|---------|
@@ -369,6 +489,10 @@ python -m app.admission.evaluate
 Embeddings enable retrieval by meaning. Default model: `sentence-transformers/all-MiniLM-L6-v2` (CPU).  
 Vectors live in `memory_embeddings` as float32 BLOBs. Similarity thresholds are model-dependent.
 
+Munin checks the local Hugging Face cache before allowing a first-time model download.
+After setup, set `EMBEDDING_LOCAL_FILES_ONLY=true` to require network-independent
+runtime loading. Model loading fails clearly when that mode is enabled and the model is absent.
+
 ```bash
 python -m app.cli embed-memories
 ```
@@ -377,6 +501,7 @@ python -m app.cli embed-memories
 
 - Python 3.12+
 - pip
+- Node.js 20+ and npm (frontend)
 
 ## Install
 
@@ -405,6 +530,15 @@ alembic upgrade head
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
+## Run the frontend
+
+```bash
+npm install
+npm run dev
+```
+
+Vite serves the UI at `http://127.0.0.1:5173` and proxies `/api` to the backend.
+
 ## Run tests
 
 ```bash
@@ -423,6 +557,7 @@ python -m app.context.evaluate
 | `EMBEDDING_PROVIDER` | `sentence_transformers` | Embedding backend |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Embedding model |
 | `EMBEDDING_DEVICE` | `cpu` | Device |
+| `EMBEDDING_LOCAL_FILES_ONLY` | `false` | Require the embedding model to exist locally; no download fallback |
 | `ADMISSION_PROVIDER` | `deterministic` | Admission backend |
 | `ADMISSION_STORE_THRESHOLD` | `0.65` | Experimental STORE threshold |
 | `ADMISSION_MIN_CONFIDENCE` | `0.60` | Minimum confidence to store |
@@ -948,7 +1083,7 @@ alembic upgrade head
 
 - **M6** ✅ — Decay + Consolidation implemented, tested, and verified.
 - **M7A** ✅ — Agent Integration Layer implemented, tested, and verified.
-- **M7B** (frontend) — NOT started (deferred until M7A is verified).
+- **M7B** ✅ — Memory Operations Frontend implemented and release-verified.
 
 ## M7A — Agent Integration Layer
 
@@ -1145,4 +1280,4 @@ include MCP.
 | **M5** | Context Assembly | ✅ |
 | **M6** | Decay + Consolidation | ✅ |
 | **M7A** | Agent Integration Layer | ✅ |
-| **M7B** | Frontend (graph UI) | deferred |
+| **M7B** | Memory operations frontend | ✅ |

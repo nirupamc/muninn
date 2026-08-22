@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "sentence_transformers"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_device: str = "cpu"
+    embedding_local_files_only: bool = False
 
     admission_provider: str = "deterministic"
     admission_store_threshold: float = 0.65

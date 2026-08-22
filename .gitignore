@@ -45,6 +45,11 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Frontend dependencies / generated output
+node_modules/
+frontend/dist/
+tsconfig.tsbuildinfo
+
 # Application data
 data/*.db
 data/*.db-*
