@@ -77,10 +77,10 @@ export function MemoryExplorer() {
   const total = memories.data?.memories.length ?? 0;
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden">
+    <div className="explorer-page relative flex h-full min-h-0 overflow-hidden">
       <section className="flex min-w-0 flex-1 flex-col" aria-label="Memory Explorer">
         <header className="border-b border-[var(--munin-border)] bg-[var(--munin-panel)] p-2 sm:p-3">
-          <div className="mb-2 flex flex-wrap items-end gap-2">
+          <div className="page-masthead mb-3"><span>SECTOR 03 // DURABLE INDEX</span><h1 className="font-display">Memory Index</h1></div><div className="mb-2 flex flex-wrap items-end gap-2">
             <label className="min-w-[180px] flex-1 font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">
               Search memories // text
               <input className="munin-input mt-1 w-full" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="> postgres" />

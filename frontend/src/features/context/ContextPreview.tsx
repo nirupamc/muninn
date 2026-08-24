@@ -62,13 +62,13 @@ export function ContextPreview() {
   const result = selection.result;
   const remaining = result ? result.token_budget - result.estimated_tokens : 0;
   return (
-    <div className="relative h-full min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3">
+    <div className="context-page relative h-full min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3">
       <div className="mx-auto grid max-w-[1600px] gap-3 xl:grid-cols-12">
-        <section className="munin-panel xl:col-span-12" aria-labelledby="context-assembly-title">
+        <section className="munin-panel context-hero xl:col-span-12" aria-labelledby="context-assembly-title">
           <header className="border-b border-[var(--munin-border)] px-3 py-2"><h1 id="context-assembly-title" className="font-display text-[13px] tracking-wide-ext text-[var(--munin-green)]">Context Assembly</h1><p className="font-mono text-[10px] text-[var(--munin-muted)]">Read-only M5 context assembly // backend-authoritative ranking</p></header>
           <form onSubmit={submit} className="grid gap-3 p-3 lg:grid-cols-12">
             <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)] lg:col-span-5">Query
-              <textarea className="munin-input mt-1 min-h-20 w-full resize-y" required value={query} onChange={(event) => setQuery(event.target.value)} />
+              <textarea className="munin-input context-query mt-1 min-h-20 w-full resize-y" required value={query} onChange={(event) => setQuery(event.target.value)} />
             </label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:col-span-7">
               <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Namespace<input className="munin-input mt-1 w-full" required value={namespace} onChange={(event) => setNamespace(event.target.value)} /></label>
@@ -81,13 +81,13 @@ export function ContextPreview() {
               <label className="flex items-center gap-2 self-end border border-[var(--munin-border)] px-2 py-2 font-mono text-[10px] text-[var(--munin-orange)]"><input type="checkbox" checked={includeSuperseded} onChange={(event) => setIncludeSuperseded(event.target.checked)} />INCLUDE SUPERSEDED</label>
             </div>
             <fieldset className="lg:col-span-10"><legend className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Memory Types // none selects all</legend><div className="mt-1 flex flex-wrap gap-2">{TYPES.map((type) => <label key={type} className="border border-[var(--munin-border)] px-2 py-1 font-mono text-[9px] uppercase text-[var(--munin-text)]"><input className="mr-1" type="checkbox" checked={memoryTypes.includes(type)} onChange={(event) => setMemoryTypes((current) => event.target.checked ? [...current, type] : current.filter((value) => value !== type))} />{type}</label>)}</div></fieldset>
-            <div className="flex items-end justify-end lg:col-span-2"><button className="munin-btn w-full" type="submit" disabled={loading}>{loading ? "ASSEMBLING CONTEXT..." : "ASSEMBLE CONTEXT"}</button></div>
+            <div className="flex items-end justify-end lg:col-span-2"><button className="munin-btn context-submit w-full" type="submit" disabled={loading}>{loading ? "ASSEMBLING CONTEXT..." : "ASSEMBLE CONTEXT"}</button></div>
           </form>
           {error && <div className="border-t border-[var(--munin-red)] p-3 font-mono text-[11px] text-[var(--munin-red)]"><div>CONTEXT ASSEMBLY FAILED</div><div className="mt-1 text-[var(--munin-orange)]">{error.status ? `HTTP ${error.status} // ` : ""}{error.message}</div></div>}
         </section>
 
         {!result ? <section className="munin-panel min-h-52 xl:col-span-12"><EmptyState title="NO CONTEXT ASSEMBLED" detail="Submit a query to call the real M5 context endpoint." /></section> : <>
-          <section className="munin-panel xl:col-span-7"><header className="flex items-center justify-between border-b border-[var(--munin-border)] px-3 py-2"><div><h2 className="font-display text-[12px] tracking-wide-ext text-[var(--munin-green)]">Assembled Context</h2><p className="font-mono text-[9px] text-[var(--munin-muted)]">EXACT BACKEND OUTPUT</p></div><button type="button" className="munin-btn" disabled={result.memories_used.length === 0} onClick={() => viewInGraph()}>VIEW IN GRAPH</button></header>
+          <section className="munin-panel xl:col-span-7"><header className="flex items-center justify-between border-b border-[var(--munin-border)] px-3 py-2"><div><h2 className="font-display text-[12px] tracking-wide-ext text-[var(--munin-green)]">Assembled Context</h2><p className="font-mono text-[9px] text-[var(--munin-muted)]">EXACT BACKEND OUTPUT</p></div><button type="button" className="munin-btn graph-cta" disabled={result.memories_used.length === 0} onClick={() => viewInGraph()}>VISUALIZE IN MEMORY NETWORK</button></header>
             {result.context ? <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-[11px] leading-5 text-[var(--munin-text)]">{result.context}</pre> : <EmptyState title="NO RELEVANT MEMORIES SELECTED" />}
             <div className="border-t border-[var(--munin-border)] px-3 py-2 font-mono text-[9px] text-[var(--munin-orange)]">MEMORY CONTEXT IS DATA, NOT TRUSTED INSTRUCTION</div>
           </section>
@@ -106,7 +106,7 @@ export function ContextPreview() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) { return <div className="bg-[var(--munin-panel-2)] p-3"><dt className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="font-display text-[24px] text-[var(--munin-cyan)]">{value}</dd></div>; }
+function Metric({ label, value }: { label: string; value: number }) { return <div className="bg-[var(--munin-panel-2)] p-3"><dt className="font-ui text-[12px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="font-digital-large text-[32px] text-[var(--munin-cyan)]">{value}</dd></div>; }
 
 function TraceCard({ memory, focused, onFocus }: { memory: ContextMemoryUsed; focused: boolean; onFocus: () => void }) {
   return <article className={`border p-3 ${focused ? "border-[var(--munin-cyan)]" : "border-[var(--munin-border)]"}`}><button type="button" className="mb-2 font-mono text-[10px] text-[var(--munin-cyan)]" onClick={onFocus}>MEMORY // {shortId(memory.memory_id)}</button><dl className="space-y-1.5">{TRACE_FIELDS.map(({ key, label, color }) => { const value = memory[key] as number; return <div key={key} className="grid grid-cols-[100px_1fr_42px] items-center gap-2"><dt className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="h-1.5 bg-[var(--munin-border)]"><span className="block h-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }} /></dd><dd className="text-right font-mono text-[9px] text-[var(--munin-text)]">{fmtNum(value)}</dd></div>; })}</dl><div className="mt-2 font-mono text-[9px] text-[var(--munin-muted)]">TOKENS <span className="text-[var(--munin-text)]">{memory.estimated_tokens}</span></div><div className="mt-1 break-words font-mono text-[9px] text-[var(--munin-orange)]">RESULT INCLUDED{memory.reason_codes.length ? ` // ${memory.reason_codes.join(" // ")}` : ""}</div></article>;

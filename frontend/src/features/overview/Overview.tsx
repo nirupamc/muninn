@@ -70,10 +70,10 @@ export function Overview() {
   );
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3">
+    <div className="overview-page h-full min-h-0 overflow-y-auto overflow-x-hidden p-2 sm:p-3">
       <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-3 xl:grid-cols-12">
         <Panel
-          title="Memory Core Status"
+          title="Memory Core"
           subtitle={complete ? "Complete current-scope lifecycle inventory" : "Safety limit reached; showing loaded records"}
           right={
             <div className="text-right font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">
@@ -107,7 +107,6 @@ export function Overview() {
               lines={[
                 `MEMORY ENGINE  ${apiOnline ? "ONLINE" : health.loading ? "CHECKING" : "OFFLINE"}`,
                 `API            ${apiOnline ? "NOMINAL" : health.loading ? "CHECKING" : "DEGRADED"}`,
-                "DATABASE       UNAVAILABLE",
                 `${complete ? "MEMORIES" : "LOADED"}       ${stats.scoped.length}`,
                 `SCOPE          ${namespace}`,
               ]}
@@ -156,7 +155,7 @@ export function Overview() {
         </Panel>
 
         <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:col-span-5 xl:grid-cols-1 2xl:grid-cols-2">
-          <Panel title="Project / Namespace Scopes" subtitle={complete ? "Complete memory inventory" : "Loaded memory inventory"}>
+          <Panel title="Project / Namespace Scopes" className="text-2xl" subtitle={complete ? "Complete memory inventory" : "Loaded memory inventory"}>
             {stats.namespaces.length === 0 ? <EmptyState title="NO NAMESPACES DISCOVERED" /> : (
               <ul className="divide-y divide-[var(--munin-border)]">
                 {stats.namespaces.map((scope) => {

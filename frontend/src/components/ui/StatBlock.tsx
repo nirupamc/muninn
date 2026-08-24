@@ -14,7 +14,7 @@ export function StatBlock({ label, value, color, sub }: StatBlockProps) {
         {label}
       </div>
       <div
-        className="font-display text-[28px] leading-none mt-1"
+        className="font-digital-large text-[32px] leading-none mt-1"
         style={{ color: color ?? "var(--munin-green)" }}
       >
         {value}

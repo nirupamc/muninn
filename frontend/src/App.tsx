@@ -9,6 +9,7 @@ import { Agents } from "./features/scope/Agents";
 import { StatusPage } from "./features/system/StatusPage";
 import { ContextSelectionProvider } from "./lib/contextSelection";
 import { LoadingState } from "./components/ui/States";
+import { RouteErrorBoundary } from "./components/errors/RouteErrorBoundary";
 
 const MemoryGraph = lazy(() => import("./features/graph/MemoryGraph").then((module) => ({ default: module.MemoryGraph })));
 const ContextPreview = lazy(() => import("./features/context/ContextPreview").then((module) => ({ default: module.ContextPreview })));
@@ -20,14 +21,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/overview" replace />} />
       <Route path="/overview" element={<Overview />} />
-      <Route path="/graph" element={<MemoryGraph />} />
+      <Route path="/graph" element={<RouteErrorBoundary routeLabel="memory graph"><MemoryGraph /></RouteErrorBoundary>} />
       <Route path="/memories" element={<MemoryExplorer />} />
       <Route path="/projects" element={<Projects />} />
       <Route path="/agents" element={<Agents />} />
       <Route path="/status" element={<StatusPage />} />
-      <Route path="/context" element={<ContextPreview />} />
-      <Route path="/timeline" element={<Timeline />} />
-      <Route path="/conflicts" element={<ConflictCenter />} />
+      <Route path="/context" element={<RouteErrorBoundary routeLabel="context assembly"><ContextPreview /></RouteErrorBoundary>} />
+      <Route path="/timeline" element={<RouteErrorBoundary routeLabel="temporal trace"><Timeline /></RouteErrorBoundary>} />
+      <Route path="/conflicts" element={<RouteErrorBoundary routeLabel="conflict center"><ConflictCenter /></RouteErrorBoundary>} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
   );

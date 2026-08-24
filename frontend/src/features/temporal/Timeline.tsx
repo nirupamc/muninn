@@ -46,10 +46,10 @@ export function Timeline() {
   if (data.loading && !data.data) return <LoadingState label="LOADING TEMPORAL INDEX" />;
   if (data.error && !data.data) return <ErrorState error={data.error} onRetry={data.reload} />;
 
-  return <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+  return <div className="timeline-page relative flex min-h-0 flex-1 flex-col overflow-hidden">
     <header className="border-b border-[var(--munin-border)] bg-[var(--munin-panel)] px-3 py-2">
       <div className="flex flex-wrap items-end gap-2">
-        <div className="mr-auto"><h1 className="font-display text-[15px] tracking-wide-ext text-[var(--munin-green)]">Temporal Timeline</h1><p className="font-mono text-[9px] text-[var(--munin-muted)]">M4 AUTHORITATIVE RELATIONSHIP HISTORY</p></div>
+        <div className="page-masthead mr-auto"><span>SECTOR 05 // CHRONOLOGY</span><h1 className="font-display">Temporal Trace</h1><p className="font-mono text-[9px] text-[var(--munin-muted)]">M4 AUTHORITATIVE RELATIONSHIP HISTORY</p></div>
         <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Search<input className="munin-input mt-1 block w-52" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="content or memory ID" /></label>
         <Select label="Namespace" value={namespace} onChange={setNamespace} options={data.data?.namespaces ?? [namespace]} />
         <Select label="Type" value={type} onChange={(value) => setType(value as MemoryType | "all")} options={["all", ...TYPES]} />

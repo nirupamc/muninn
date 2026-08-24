@@ -31,9 +31,9 @@ export function ConflictCenter() {
   if (data.loading && !data.data) return <LoadingState label="LOADING CONFLICT INDEX" />;
   if (data.error && !data.data) return <ErrorState error={data.error} onRetry={data.reload} />;
 
-  return <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+  return <div className="conflict-page relative flex min-h-0 flex-1 flex-col overflow-hidden">
     <header className="border-b border-[var(--munin-border)] bg-[var(--munin-panel)] px-3 py-2">
-      <div className="flex flex-wrap items-end gap-2"><div className="mr-auto"><h1 className="font-display text-[15px] tracking-wide-ext text-[var(--munin-red)]">Conflict Center</h1><p className="font-mono text-[9px] text-[var(--munin-muted)]">READ-ONLY M4 CONTRADICTION INDEX</p></div>
+      <div className="flex flex-wrap items-end gap-2"><div className="page-masthead mr-auto"><span>SECTOR 06 // ARBITRATION</span><h1 className="font-display text-[var(--munin-red)]">Conflict Center</h1><p className="font-mono text-[9px] text-[var(--munin-muted)]">READ-ONLY M4 CONTRADICTION INDEX</p></div>
         <Select label="Namespace" value={namespace} options={data.data?.namespaces ?? [namespace]} onChange={setNamespace} />
         <Select label="Memory Type" value={type} options={["all", ...TYPES]} onChange={(value) => setType(value as MemoryType | "all")} />
         <Select label="Agent" value={agent} options={["all", ...agents]} onChange={setAgent} />

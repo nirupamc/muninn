@@ -65,7 +65,7 @@ export function MemoryInspector({ memoryId, node, onClose }: MemoryInspectorProp
   ) : "—";
 
   return (
-    <aside className="fixed inset-0 z-40 flex flex-col overflow-hidden border-l border-[var(--munin-border-bright)] bg-[var(--munin-panel)] shadow-[var(--munin-glow)] sm:absolute sm:left-auto sm:w-[440px]" aria-label="Memory Inspector" aria-live="polite">
+    <aside className="memory-inspector fixed inset-0 z-40 flex flex-col overflow-hidden border-l border-[var(--munin-border-bright)] bg-[var(--munin-panel)] shadow-[var(--munin-glow)] sm:absolute sm:left-auto sm:w-[440px]" aria-label="Memory Inspector" aria-live="polite">
       <header className="flex items-center justify-between gap-2 border-b border-[var(--munin-border)] px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           {backStack.length > 0 && <button type="button" className="munin-btn" onClick={goBack} aria-label="Back to previous memory">← BACK</button>}
