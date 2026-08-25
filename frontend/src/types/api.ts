@@ -151,3 +151,102 @@ export interface ConsolidatedFromResponse {
   derived_memory_id: string;
   sources: { memory_id: string; content: string }[];
 }
+
+// M8 — Project & Capture types
+
+export type ProjectStatus = "DISCOVERED" | "CONNECTED" | "MEMORIZED" | "ACTIVE" | "DISABLED";
+
+export interface ProjectRead {
+  id: string;
+  name: string;
+  namespace: string;
+  root_path: string;
+  canonical_path: string;
+  git_root: string | null;
+  remote_url: string | null;
+  default_branch: string | null;
+  status: ProjectStatus;
+  capture_enabled: boolean;
+  discovered_at: string;
+  last_activity_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ProjectListResponse {
+  projects: ProjectRead[];
+  total: number;
+}
+
+export interface ProjectScanResponse {
+  discovered: ProjectRead[];
+}
+
+export interface ProjectActivityResponse {
+  project_id: string;
+  namespace: string;
+  last_activity_at: string | null;
+  status: string;
+  capture_enabled: boolean;
+  recent_captures: CaptureEventRead[];
+}
+
+export type CaptureSource =
+  | "git"
+  | "filesystem"
+  | "codex"
+  | "kilo"
+  | "opencode"
+  | "generic"
+  | "manual";
+
+export type CaptureEventType =
+  | "project_discovered"
+  | "git_commit"
+  | "git_branch_change"
+  | "file_batch_changed"
+  | "agent_session_started"
+  | "agent_session_finished"
+  | "agent_summary"
+  | "agent_decision"
+  | "agent_tool_result"
+  | "manual_note";
+
+export type CaptureProcessingStatus = "pending" | "processing" | "completed" | "failed";
+
+export type AdmissionDecision = "STORE" | "IGNORE";
+
+export interface CaptureEventRead {
+  id: string;
+  project_id: string;
+  namespace: string;
+  source: CaptureSource;
+  event_type: CaptureEventType;
+  agent_id: string | null;
+  session_id: string | null;
+  working_directory: string | null;
+  content: string;
+  metadata: Record<string, unknown>;
+  fingerprint: string;
+  occurred_at: string;
+  captured_at: string;
+  processing_status: CaptureProcessingStatus;
+  memory_event_id: string | null;
+  memory_id: string | null;
+  admission_decision: AdmissionDecision | null;
+  error: string | null;
+}
+
+export interface CaptureStatusResponse {
+  projects_with_capture: number;
+  total_capture_events: number;
+  pending_events: number;
+  adapter_health: Record<string, AdapterHealthRead[]>;
+}
+
+export interface AdapterHealthRead {
+  name: string;
+  available: boolean;
+  last_check: string;
+  error: string | null;
+  metadata: Record<string, unknown> | null;
+}

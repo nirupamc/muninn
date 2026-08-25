@@ -82,6 +82,15 @@ class Settings(BaseSettings):
     context_max_token_budget: int = 20000
     context_recency_lambda: float = 0.05
 
+    # M8 — Universal Project Discovery & Memory Capture
+    workspace_roots: str = ""
+    capture_enabled: bool = True
+    capture_filesystem_enabled: bool = True
+    capture_git_enabled: bool = True
+    capture_activity_window_minutes: int = 60
+    capture_filesystem_debounce_seconds: int = 30
+    capture_excluded_paths: str = ".git,node_modules,.venv,venv,dist,build,__pycache__,AppData,Local,Temp,tmp,cache,.cache,.env,.env.*,id_rsa,id_ed25519,id_ecdsa,credentials.json,secrets.json,config.json"
+
 
 @lru_cache
 def get_settings() -> Settings:

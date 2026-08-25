@@ -128,4 +128,127 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  // M8 — Projects
+  listProjects: (params: {
+    status?: string | null;
+    capture_enabled?: boolean | null;
+    limit?: number;
+    offset?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    if (params.status) q.set("status", params.status);
+    if (params.capture_enabled !== undefined) q.set("capture_enabled", String(params.capture_enabled));
+    q.set("limit", String(params.limit ?? 100));
+    q.set("offset", String(params.offset ?? 0));
+    return request<import("../types/api").ProjectListResponse>(
+      `/api/v1/projects?${q.toString()}`,
+    );
+  },
+
+  scanProjects: () =>
+    request<import("../types/api").ProjectScanResponse>(
+      "/api/v1/projects/scan",
+      { method: "POST" },
+    ),
+
+  registerProject: (payload: { path: string; name?: string; enable_capture?: boolean }) =>
+    request<import("../types/api").ProjectRead>(
+      "/api/v1/projects/register",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  getProject: (id: string) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}`),
+
+  updateProject: (id: string, payload: { capture_enabled?: boolean }) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  enableProjectCapture: (id: string) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}/enable`, {
+      method: "POST",
+    }),
+
+  disableProjectCapture: (id: string) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}/disable`, {
+      method: "POST",
+    }),
+
+  getProjectActivity: (id: string, limit?: number) => {
+    const q = new URLSearchParams();
+    if (limit) q.set("limit", String(limit));
+    return request<import("../types/api").ProjectActivityResponse>(
+      `/api/v1/projects/${id}/activity?${q.toString()}`,
+    );
+  },
+
+  // M8 — Capture
+  listCaptureEvents: (params: {
+    project_id?: string | null;
+    limit?: number;
+    offset?: number;
+    status?: string | null;
+    source?: string | null;
+  } = {}) => {
+    const q = new URLSearchParams();
+    if (params.project_id) q.set("project_id", params.project_id);
+    q.set("limit", String(params.limit ?? 100));
+    q.set("offset", String(params.offset ?? 0));
+    if (params.status) q.set("status", params.status);
+    if (params.source) q.set("source", params.source);
+    return request<import("../types/api").CaptureEventRead[]>(
+      `/api/v1/capture/events?${q.toString()}`,
+    );
+  },
+
+  getCaptureEvent: (id: string) =>
+    request<import("../types/api").CaptureEventRead>(`/api/v1/capture/events/${id}`),
+
+  submitCaptureEvent: (payload: {
+    project_path?: string;
+    namespace?: string;
+    source: string;
+    event_type: string;
+    agent_id?: string;
+    session_id?: string;
+    working_directory?: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+    fingerprint?: string;
+  }) =>
+    request<import("../types/api").CaptureEventRead>(
+      "/api/v1/capture/events",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  submitAgentSummary: (payload: {
+    project_path?: string;
+    namespace?: string;
+    agent_id: string;
+    session_id?: string;
+    summary: string;
+    working_directory?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    request<import("../types/api").CaptureEventRead>(
+      "/api/v1/capture/events/agent-summary",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  getCaptureStatus: () =>
+    request<import("../types/api").CaptureStatusResponse>(
+      "/api/v1/capture/status",
+    ),
 };
