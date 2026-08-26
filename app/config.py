@@ -91,6 +91,28 @@ class Settings(BaseSettings):
     capture_filesystem_debounce_seconds: int = 30
     capture_excluded_paths: str = ".git,node_modules,.venv,venv,dist,build,__pycache__,AppData,Local,Temp,tmp,cache,.cache,.env,.env.*,id_rsa,id_ed25519,id_ecdsa,credentials.json,secrets.json,config.json"
 
+    # M8.1 — Workstation Project Discovery Truth
+    project_discovery_enabled: bool = True
+    auto_discover_drives: bool = True
+    auto_discover_fixed_drives: bool = True
+    auto_discover_removable_drives: bool = False
+    auto_discover_network_drives: bool = False
+    project_scan_max_depth: int = 6
+    project_scan_max_directories: int = 200000
+    project_detection_threshold: int = 50
+    project_discovery_excluded_roots: str = ""
+    project_discovery_extra_excluded_dirs: str = ""
+    project_scan_on_start: bool = False
+    discovery_report_path: str = "data/discovery_last_scan.json"
+
+    # M8.3 — Native Agent Session Capture
+    agent_session_capture_enabled: bool = True
+    agent_session_poll_seconds: int = 60
+    agent_session_ttl_minutes: int = 1440  # 24 hours
+    codex_capture_enabled: bool = True
+    kilo_capture_enabled: bool = True
+    opencode_capture_enabled: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

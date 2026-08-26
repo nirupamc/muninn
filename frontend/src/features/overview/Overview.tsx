@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Gauge, TerminalDisplay } from "@mdrbx/nerv-ui";
+import { api, ApiError } from "../../api/client";
+import type { ProjectRead } from "../../types/api";
 import { useHealth } from "../../hooks/useHealth";
 import { useScope } from "../../lib/scope";
 import { Panel } from "../../components/ui/Panel";
@@ -29,10 +31,50 @@ function timeOnly(iso: string): string {
   return formatted === "—" ? formatted : formatted.slice(11, 19);
 }
 
+// M8.1 — project UI state is derived from independent registry facts,
+// never fabricated. Properties overlap deliberately (K).
+export type ProjectUiState = "ACTIVE" | "MEMORIZED" | "CONNECTED" | "DISCOVERED" | "IGNORED";
+
+export const PROJECT_STATE_COLOR: Record<ProjectUiState, string> = {
+  ACTIVE: "var(--munin-green)",
+  MEMORIZED: "var(--munin-amber)",
+  CONNECTED: "var(--munin-cyan)",
+  DISCOVERED: "var(--munin-muted)",
+  IGNORED: "var(--munin-red)",
+};
+
+export function deriveProjectState(p: ProjectRead, nowMs = Date.now()): ProjectUiState {
+  if (p.ignored) return "IGNORED";
+  if (p.last_activity_at) {
+    const ageMs = nowMs - new Date(p.last_activity_at).getTime();
+    if (ageMs >= 0 && ageMs < 60 * 60 * 1000) return "ACTIVE";
+  }
+  if ((p.memory_count ?? 0) > 0) return "MEMORIZED";
+  if (p.capture_enabled) return "CONNECTED";
+  return "DISCOVERED";
+}
+
+function useProjectRegistry() {
+  const [projects, setProjects] = useState<ProjectRead[] | null>(null);
+      const [error, setError] = useState<ApiError | null>(null);
+  const load = () => {
+    api
+      .listProjects({ limit: 500 })
+      .then((res) => {
+        setProjects(res.projects);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof ApiError ? e : new ApiError(e instanceof Error ? e.message : String(e), 0)));
+  };
+  useEffect(load, []);
+  return { projects, error, reload: load };
+}
+
 export function Overview() {
   const { namespace, setNamespace } = useScope();
   const overview = useOverviewData(namespace);
   const health = useHealth();
+  const registry = useProjectRegistry();
 
   const stats = useMemo(() => {
     const all = overview.data?.memories ?? [];
@@ -40,12 +82,6 @@ export function Overview() {
     const byStatus = Object.fromEntries(
       STATUSES.map((status) => [status, scoped.filter((memory) => memory.status === status).length]),
     ) as Record<MemoryStatus, number>;
-    const namespaces = Array.from(new Set(all.map((memory) => memory.namespace)))
-      .map((name) => {
-        const memories = all.filter((memory) => memory.namespace === name);
-        return { name, total: memories.length, active: memories.filter((memory) => memory.status === "active").length };
-      })
-      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const agentCounts = new Map<string, number>();
     for (const memory of scoped) {
       const agent = memory.agentId?.trim() || "unknown";
@@ -53,7 +89,7 @@ export function Overview() {
     }
     const agents = Array.from(agentCounts, ([id, count]) => ({ id, count }))
       .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
-    return { scoped, byStatus, namespaces, agents };
+    return { scoped, byStatus, agents };
   }, [overview.data, namespace]);
 
   if (overview.loading && !overview.data) return <LoadingState label="MEMORY CORE SYNCHRONIZING" />;
@@ -155,23 +191,55 @@ export function Overview() {
         </Panel>
 
         <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:col-span-5 xl:grid-cols-1 2xl:grid-cols-2">
-          <Panel title="Project / Namespace Scopes" className="text-2xl" subtitle={complete ? "Complete memory inventory" : "Loaded memory inventory"}>
-            {stats.namespaces.length === 0 ? <EmptyState title="NO NAMESPACES DISCOVERED" /> : (
-              <ul className="divide-y divide-[var(--munin-border)]">
-                {stats.namespaces.map((scope) => {
-                  const selected = scope.name === namespace;
+          <Panel
+            title="Workstation Projects"
+            className="text-2xl"
+            subtitle={registry.projects ? `${registry.projects.length} registered projects` : "Project Registry"}
+            right={
+              <button
+                type="button"
+                onClick={registry.reload}
+                className="font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)] hover:text-[var(--munin-cyan)]"
+              >
+                refresh
+              </button>
+            }
+          >
+            {registry.error ? (
+              <ErrorState error={registry.error} onRetry={registry.reload} />
+            ) : !registry.projects ? (
+              <LoadingState label="LOADING PROJECT REGISTRY" />
+            ) : registry.projects.length === 0 ? (
+              <EmptyState
+                title="NO PROJECTS REGISTERED"
+                detail="Scan the workstation from the Projects page to discover filesystem projects."
+              />
+            ) : (
+              <ul className="max-h-[320px] divide-y divide-[var(--munin-border)] overflow-y-auto">
+                {registry.projects.map((p) => {
+                  const selected = p.namespace === namespace;
+                  const state = deriveProjectState(p);
                   return (
-                    <li key={scope.name}>
+                    <li key={p.id}>
                       <button
                         type="button"
-                        onClick={() => setNamespace(scope.name)}
+                        onClick={() => setNamespace(p.namespace)}
                         aria-pressed={selected}
-                        className={`grid w-full grid-cols-[1fr_auto] gap-3 border-l-2 px-3 py-2 text-left font-mono transition-colors ${selected ? "border-[var(--munin-green)] bg-[rgba(39,227,107,0.07)]" : "border-transparent hover:border-[var(--munin-cyan)] hover:bg-[rgba(34,211,238,0.04)]"}`}
+                        title={`${p.canonical_path} — ${p.memory_count} memories`}
+                        className={`grid w-full grid-cols-[1fr_auto] gap-x-3 border-l-2 px-3 py-2 text-left font-mono transition-colors ${selected ? "border-[var(--munin-green)] bg-[rgba(39,227,107,0.07)]" : "border-transparent hover:border-[var(--munin-cyan)] hover:bg-[rgba(34,211,238,0.04)]"}`}
                       >
-                        <span className="min-w-0 truncate text-[11px] text-[var(--munin-cyan)]" title={scope.name}>{scope.name}</span>
-                        <span className="text-right text-[10px] text-[var(--munin-text)]">{scope.total}</span>
+                        <span className="min-w-0 truncate text-[11px] text-[var(--munin-text)]">
+                          {p.name}
+                          <span className="ml-2 text-[9px] normal-case text-[var(--munin-muted)]" title={p.canonical_path}>{p.canonical_path}</span>
+                        </span>
+                        <span
+                          className="whitespace-nowrap text-[9px] uppercase tracking-wider"
+                          style={{ color: PROJECT_STATE_COLOR[state] }}
+                        >
+                          {state}
+                        </span>
                         <span className="text-[9px] uppercase text-[var(--munin-muted)]">{selected ? "active scope" : "select scope"}</span>
-                        <span className="text-right text-[9px] text-[var(--munin-muted)]">{scope.active} active</span>
+                        <span className="whitespace-nowrap text-right text-[9px] text-[var(--munin-muted)]">{p.memory_count} {p.memory_count === 1 ? "memory" : "memories"}</span>
                       </button>
                     </li>
                   );

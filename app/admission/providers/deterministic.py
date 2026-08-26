@@ -471,9 +471,20 @@ class DeterministicAdmissionProvider(AdmissionProvider):
 
 
 def _split_clauses(text: str) -> list[str]:
+    # Long texts (e.g. agent session messages) should NOT be split into
+    # dozens of tiny fragments — each fragment becomes a separate memory.
+    # Only split short, human-authored multi-fact messages.
+    if len(text) > 500:
+        return [text]
+
     # Keep "and" splits for multi-fact messages while avoiding tiny fragments.
     parts = re.split(r"\s*(?:,|\band\b)\s+", text, flags=re.IGNORECASE)
     cleaned = [p.strip() for p in parts if p and len(p.strip()) > 8]
+
+    # Cap at 5 clauses to prevent explosion from pathological inputs.
+    if len(cleaned) > 5:
+        return [text]
+
     return cleaned if cleaned else [text]
 
 

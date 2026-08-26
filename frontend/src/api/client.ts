@@ -133,24 +133,44 @@ export const api = {
   listProjects: (params: {
     status?: string | null;
     capture_enabled?: boolean | null;
+    include_ignored?: boolean;
     limit?: number;
     offset?: number;
   } = {}) => {
     const q = new URLSearchParams();
     if (params.status) q.set("status", params.status);
     if (params.capture_enabled !== undefined) q.set("capture_enabled", String(params.capture_enabled));
-    q.set("limit", String(params.limit ?? 100));
+    if (params.include_ignored) q.set("include_ignored", "true");
+    q.set("limit", String(params.limit ?? 500));
     q.set("offset", String(params.offset ?? 0));
     return request<import("../types/api").ProjectListResponse>(
       `/api/v1/projects?${q.toString()}`,
     );
   },
 
-  scanProjects: () =>
+  scanProjects: (payload: { roots?: string[]; include_auto_drives?: boolean } = {}) =>
     request<import("../types/api").ProjectScanResponse>(
       "/api/v1/projects/scan",
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
     ),
+
+  getDiscoveryStatus: () =>
+    request<import("../types/api").DiscoveryStatusResponse>(
+      "/api/v1/projects/discovery/status",
+    ),
+
+  ignoreProject: (id: string) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}/ignore`, {
+      method: "POST",
+    }),
+
+  unignoreProject: (id: string) =>
+    request<import("../types/api").ProjectRead>(`/api/v1/projects/${id}/unignore`, {
+      method: "POST",
+    }),
 
   registerProject: (payload: { path: string; name?: string; enable_capture?: boolean }) =>
     request<import("../types/api").ProjectRead>(

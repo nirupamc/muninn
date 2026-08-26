@@ -1,0 +1,25 @@
+{
+  "started_at": "2026-08-26T20:30:00.647741+00:00",
+  "finished_at": "2026-08-26T20:30:00.710741+00:00",
+  "duration_ms": 63,
+  "drives": [],
+  "roots_scanned": [
+    "C:\\Users\\TANTEC~1\\AppData\\Local\\Temp\\tmptc9z_qpe"
+  ],
+  "directories_considered": 3,
+  "directories_skipped": 1,
+  "skipped_by_reason": {
+    "excluded directory (.git)": 1
+  },
+  "permission_errors": 0,
+  "max_depth_reached": 1,
+  "projects_found": 2,
+  "projects_new": 0,
+  "projects_existing": 2,
+  "skipped_candidates": [
+    {
+      "path": "C:\\Users\\TANTEC~1\\AppData\\Local\\Temp\\tmptc9z_qpe\\scratch-repo\\.git",
+      "reason": "excluded directory (.git)"
+    }
+  ]
+}

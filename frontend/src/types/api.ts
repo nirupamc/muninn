@@ -170,6 +170,11 @@ export interface ProjectRead {
   discovered_at: string;
   last_activity_at: string | null;
   metadata: Record<string, unknown>;
+  ignored: boolean;
+  discovery_source: string | null;
+  discovery_evidence: string[];
+  last_discovered_at: string | null;
+  memory_count: number;
 }
 
 export interface ProjectListResponse {
@@ -177,8 +182,40 @@ export interface ProjectListResponse {
   total: number;
 }
 
+export interface DriveReportRead {
+  root_path: string;
+  drive_type: string;
+  status: "scanned" | "skipped" | "unavailable";
+  reason: string | null;
+}
+
+export interface SkippedCandidateRead {
+  path: string;
+  reason: string;
+}
+
 export interface ProjectScanResponse {
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number;
+  drives: DriveReportRead[];
+  roots_scanned: string[];
+  directories_considered: number;
+  directories_skipped: number;
+  skipped_by_reason: Record<string, number>;
+  permission_errors: number;
+  max_depth_reached: number;
+  projects_found: number;
+  projects_new_count: number;
+  projects_existing_count: number;
   discovered: ProjectRead[];
+  existing: ProjectRead[];
+  skipped_candidates: SkippedCandidateRead[];
+}
+
+export interface DiscoveryStatusResponse {
+  scan_in_progress: boolean;
+  last_scan: Partial<ProjectScanResponse> & { started_at?: string; finished_at?: string | null } | null;
 }
 
 export interface ProjectActivityResponse {

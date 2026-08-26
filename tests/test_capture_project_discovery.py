@@ -8,7 +8,15 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal, Base, engine
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker as _sessionmaker
+
+# Isolated throwaway database so test teardown never wipes the
+# production project registry in data/munin.db.
+_test_db_dir = tempfile.mkdtemp(prefix="munin_m8_tests_")
+engine = create_engine(f"sqlite:///{_test_db_dir}/m8.db", connect_args={"check_same_thread": False})
+TestSessionLocal = _sessionmaker(bind=engine, autocommit=False, autoflush=False)
+from app.database import Base
 from app.models.project import Project, ProjectStatus
 from app.models.capture import CaptureEvent, CaptureSource, CaptureEventType, CaptureProcessingStatus
 from app.projects.service import ProjectService
@@ -42,7 +50,7 @@ def test_project_registration() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -90,7 +98,7 @@ def test_project_discovery() -> None:
         excluded.mkdir()
         (excluded / "package.json").write_text("{}")
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             # Manually set workspace roots for test
@@ -123,7 +131,7 @@ def test_namespace_collision_resolution() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project1 = service.register_project(str(project_path))
@@ -157,7 +165,7 @@ def test_git_capture_adapter() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -188,7 +196,7 @@ def test_capture_event_idempotency() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -236,7 +244,7 @@ def test_capture_through_admission_pipeline() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -284,7 +292,7 @@ def test_filesystem_exclusion() -> None:
         git_dir = project_path / ".git"
         assert git_dir.exists()
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -314,7 +322,7 @@ def test_capture_audit_table() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -358,7 +366,7 @@ def test_project_status_transitions() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path))
@@ -397,7 +405,7 @@ def test_cross_agent_continuity_simulation() -> None:
         subprocess.run(["git", "add", "."], cwd=project_path, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=project_path, capture_output=True)
 
-        db = SessionLocal()
+        db = TestSessionLocal()
         try:
             service = ProjectService(db)
             project = service.register_project(str(project_path), enable_capture=True)
@@ -423,7 +431,7 @@ def test_cross_agent_continuity_simulation() -> None:
             )
 
             # Simulate restart - new DB session
-            db2 = SessionLocal()
+            db2 = TestSessionLocal()
             try:
                 resolver = ProjectResolver(db2)
                 project2 = resolver.resolve_by_namespace(project.namespace)

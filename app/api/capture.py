@@ -271,3 +271,35 @@ def get_capture_status(
         pending_events=pending_events,
         adapter_health=adapter_health,
     )
+
+
+# Agent session capture endpoints (M8.3)
+
+class AgentSessionStatusResponse(BaseModel):
+    """Status of agent session capture adapters."""
+    adapters: dict[str, dict[str, Any]]
+    available_adapters: list[str]
+    last_scan: datetime | None = None
+
+
+@router.get(
+    "/agent-sessions/status",
+    response_model=AgentSessionStatusResponse,
+    summary="Get agent session adapter status",
+    tags=["agent_sessions"],
+)
+def get_agent_session_status(
+    db: Session = Depends(get_db),
+) -> AgentSessionStatusResponse:
+    """Get status of agent session capture adapters."""
+    from app.capture.agent_sessions.service import AgentSessionService
+    
+    service = AgentSessionService(db)
+    health = service.get_adapter_health()
+    available = service.get_available_adapters()
+    
+    return AgentSessionStatusResponse(
+        adapters={k.value: v for k, v in health.items()},
+        available_adapters=[a.value for a in available],
+        last_scan=datetime.now(UTC),
+    )

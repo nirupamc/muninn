@@ -64,9 +64,20 @@ class Project(Base):
         default=utc_now,
         nullable=False,
     )
+    last_discovered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     last_activity_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+    ignored: Mapped[bool] = mapped_column(nullable=False, default=False)
+    discovery_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    discovery_evidence_json: Mapped[list[Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
     )
 
     metadata_: Mapped[dict[str, Any]] = mapped_column(

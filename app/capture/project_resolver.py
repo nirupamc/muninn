@@ -56,7 +56,7 @@ class ProjectResolver:
         from app.projects.service import ProjectService
 
         service = ProjectService(self.db)
-        return service.register_project(path, name=name, enable_capture=False)
+        return service.register_project(path, name=name, enable_capture=True)
 
     def get_active_projects(self) -> list[Project]:
         """Get all projects with capture enabled."""

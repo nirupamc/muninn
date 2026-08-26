@@ -27,6 +27,12 @@ class CaptureAdapter(ABC):
 
     name: CaptureSource
 
+    # Whether this adapter participates in the polling/background discovery
+    # loop. Push-based adapters (e.g. GenericCaptureBridge) receive events
+    # via HTTP/CLI and must NOT be polled — their discover_events() has a
+    # different contract and calling it from the polling loop is a bug.
+    supports_polling: bool = True
+
     def __init__(self, project: Project) -> None:
         self.project = project
 

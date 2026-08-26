@@ -106,6 +106,10 @@ def cmd_project_add(args) -> int:
     try:
         service = ProjectService(db)
         project = service.register_project(args.path, name=args.name, enable_capture=args.enable_capture)
+        if project is None:
+            print(f"Path does not exist: {args.path}")
+            return 1
+        db.commit()
         print(f"id={project.id} name={project.name} namespace={project.namespace} path={project.canonical_path}")
         return 0
     finally:
@@ -116,27 +120,102 @@ def cmd_project_list(args) -> int:
     db = SessionLocal()
     try:
         service = ProjectService(db)
-        projects = service.list_projects(limit=args.limit, offset=args.offset)
+        include_ignored = getattr(args, "include_ignored", False)
+        projects, counts, _total = service.list_projects_with_counts(
+            include_ignored=include_ignored,
+            limit=args.limit,
+            offset=args.offset,
+        )
         if not projects:
             print("No projects found.")
             return 0
         for p in projects:
-            print(f"{p.id}  {p.name:<30} {p.namespace:<30} {p.status.value:<12} capture={p.capture_enabled}  {p.canonical_path}")
+            memory_count = counts.get(p.namespace, 0)
+            ignored = " [IGNORED]" if p.ignored else ""
+            git = "git" if p.git_root else "no-git"
+            print(
+                f"{p.id}  {p.name:<30} {p.namespace:<30} {p.status.value:<12} "
+                f"capture={str(p.capture_enabled):<5} {git:<6} memories={memory_count}{ignored}  {p.canonical_path}"
+            )
         return 0
     finally:
         db.close()
 
 
+def cmd_project_drives(_args) -> int:
+    from app.projects.drives import DriveDiscoveryService
+
+    settings = get_settings()
+    service = DriveDiscoveryService()
+    excluded = {p.strip() for p in settings.project_discovery_excluded_roots.split(";") if p.strip()}
+    drives = service.list_drives(
+        include_fixed=settings.auto_discover_fixed_drives,
+        include_removable=settings.auto_discover_removable_drives,
+        include_network=settings.auto_discover_network_drives,
+        excluded_roots=excluded,
+    )
+    if not drives:
+        print("No drives found.")
+        return 0
+    for d in drives:
+        state = "enabled" if d.enabled_for_scan else "disabled"
+        reason = f" ({d.skip_reason})" if d.skip_reason else ""
+        accessible = "" if d.accessible else " [unavailable]"
+        print(f"{d.root_path:<4} {d.drive_type.value:<10} {state}{reason}{accessible}")
+    return 0
+
+
 def cmd_project_scan(args) -> int:
+    from app.projects.discovery import ProjectDiscoveryService as Orchestrator
+
     db = SessionLocal()
     try:
-        service = ProjectService(db)
-        discovered = service.scan_workspace_roots()
-        if not discovered:
-            print("No projects discovered.")
-            return 0
-        for p in discovered:
-            print(f"DISCOVERED: {p.name} ({p.namespace}) at {p.canonical_path}")
+        orchestrator = Orchestrator(db)
+        outcome = orchestrator.run_scan(
+            roots=list(args.roots) if args.roots else None,
+            include_auto_drives=not args.no_auto_drives,
+        )
+        summary = outcome.to_summary()
+
+        print("\nDrive Discovery")
+        print("---------------")
+        for d in summary["drives"]:
+            line = f"{d['root_path']:<5} {d['drive_type']:<10} {d['status']}"
+            if d.get("reason"):
+                line += f" ({d['reason']})"
+            print(line)
+        if not summary["drives"]:
+            print("(automatic drive discovery disabled)")
+
+        print("\nScan summary:")
+        print(f"  roots_scanned:            {len(summary['roots_scanned'])}")
+        print(f"  directories_considered:   {summary['directories_considered']}")
+        print(f"  directories_skipped:      {summary['directories_skipped']}")
+        print(f"  permission_errors:        {summary['permission_errors']}")
+        print(f"  max_depth_reached:        {summary['max_depth_reached']}")
+        print(f"  projects_found:           {summary['projects_found']}")
+        print(f"  projects_new:             {summary['projects_new']}")
+        print(f"  projects_existing:        {summary['projects_existing']}")
+        print(f"  duration_ms:              {summary['duration_ms']}")
+
+        db.commit()
+
+        print("\nNew projects:")
+        if not outcome.projects_new:
+            print("  (none)")
+        for p in outcome.projects_new:
+            print(f"  DETECTED {p.canonical_path}")
+            if args.verbose:
+                evidence = ", ".join(p.discovery_evidence_json or [])
+                print(f"    namespace: {p.namespace}")
+                print(f"    evidence:  {evidence or 'n/a'}")
+                print(f"    git:       {'yes' if p.git_root else 'no'}")
+
+        if args.verbose and summary["skipped_candidates"]:
+            print("\nSkipped candidates (bounded sample):")
+            for sk in summary["skipped_candidates"]:
+                print(f"  SKIPPED {sk['path']}")
+                print(f"    reason: {sk['reason']}")
         return 0
     finally:
         db.close()
@@ -146,12 +225,13 @@ def cmd_project_enable(args) -> int:
     db = SessionLocal()
     try:
         service = ProjectService(db)
-        project = service.enable_capture(args.project_id)
-        if project:
-            print(f"Capture enabled for {project.name} ({project.namespace})")
-        else:
+        project = service.find_project(args.project_id) or service.get_project(args.project_id)
+        if not project:
             print("Project not found")
             return 1
+        project = service.enable_capture(project.id)
+        print(f"Capture enabled for {project.name} ({project.namespace})")
+        db.commit()
         return 0
     finally:
         db.close()
@@ -161,12 +241,45 @@ def cmd_project_disable(args) -> int:
     db = SessionLocal()
     try:
         service = ProjectService(db)
-        project = service.disable_capture(args.project_id)
-        if project:
-            print(f"Capture disabled for {project.name} ({project.namespace})")
-        else:
+        project = service.find_project(args.project_id)
+        if not project:
             print("Project not found")
             return 1
+        project = service.disable_capture(project.id)
+        print(f"Capture disabled for {project.name} ({project.namespace})")
+        db.commit()
+        return 0
+    finally:
+        db.close()
+
+
+def cmd_project_ignore(args) -> int:
+    db = SessionLocal()
+    try:
+        service = ProjectService(db)
+        project = service.find_project(args.project)
+        if not project:
+            print("Project not found")
+            return 1
+        service.set_ignored(project.id, True)
+        db.commit()
+        print(f"Ignored: {project.name} ({project.canonical_path})")
+        return 0
+    finally:
+        db.close()
+
+
+def cmd_project_unignore(args) -> int:
+    db = SessionLocal()
+    try:
+        service = ProjectService(db)
+        project = service.find_project(args.project)
+        if not project:
+            print("Project not found (ignored projects are still resolvable by id/namespace)")
+            return 1
+        service.set_ignored(project.id, False)
+        db.commit()
+        print(f"Unignored: {project.name} ({project.canonical_path})")
         return 0
     finally:
         db.close()
@@ -268,6 +381,129 @@ def cmd_capture_status(args) -> int:
         db.close()
 
 
+def cmd_capture_agent_sessions(args) -> int:
+    """Show agent session adapter status."""
+    db = SessionLocal()
+    try:
+        from app.capture.agent_sessions.service import AgentSessionService
+        
+        service = AgentSessionService(db)
+        health = service.get_adapter_health()
+        available = service.get_available_adapters()
+        
+        print("Agent Session Adapters:")
+        print("-" * 60)
+        
+        for source, info in health.items():
+            status = "available" if info.get("available") else "unavailable"
+            integration = info.get("integration_status", "unknown")
+            print(f"  {source.value:15} status={status:12} integration={integration}")
+        
+        print(f"\nAvailable adapters: {len(available)}")
+        for a in available:
+            print(f"  - {a.value}")
+        
+        # Try to discover sessions
+        sessions = service.discover_sessions()
+        print(f"\nDiscovered sessions: {len(sessions)}")
+        
+        return 0
+    finally:
+        db.close()
+
+
+def cmd_run(args) -> int:
+    """Run a coding agent with Munin context injection."""
+    from app.agents.runner import AgentRunner, RunConfig
+    from app.agents.types import AgentLaunchResult
+
+    # Parse agent name and extra args from REMAINDER list.
+    # Convention: munin run [flags] -- codex [agent args...]
+    # After argparse REMAINDER, args.agent is a list like ['codex', '--verbose']
+    # or ['--', 'codex', '--verbose'] depending on how user typed it.
+    agent_parts = args.agent or []
+    # Strip leading '--' separator if present
+    if agent_parts and agent_parts[0] == "--":
+        agent_parts = agent_parts[1:]
+
+    if not agent_parts:
+        print("Error: No agent specified. Usage: munin run [flags] -- <agent> [args...]", file=sys.stderr)
+        return 1
+
+    agent_name = agent_parts[0]
+    extra_args = agent_parts[1:]
+
+    # Parse project argument if it's a path
+    project_path = None
+    project_id = None
+    namespace = None
+
+    if args.project:
+        # Try to determine if it's a path or namespace
+        if args.project.startswith("project:") or ":" not in args.project:
+            # Likely a namespace
+            namespace = args.project
+        else:
+            # Treat as path
+            project_path = args.project
+
+    if args.project_id:
+        project_id = args.project_id
+
+    config = RunConfig(
+        agent_name=agent_name,
+        project_path=project_path,
+        project_id=project_id,
+        namespace=namespace,
+        task=args.task,
+        extra_args=extra_args,
+        dry_run=args.dry_run,
+        token_budget=args.token_budget,
+        max_memories=args.max_memories,
+    )
+
+    runner = AgentRunner(config)
+    result: AgentLaunchResult = runner.run()
+
+    if not result.success:
+        print(f"Error: {result.error}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        # Dry run output is already printed by runner
+        return 0
+
+    # For actual run, the agent should have been launched
+    if result.exit_code is not None and result.exit_code != 0:
+        return result.exit_code
+
+    return 0
+
+
+def cmd_agents(args) -> int:
+    """Show installed coding agent status."""
+    from app.agents.registry import get_registry
+    
+    registry = get_registry()
+    table = registry.get_status_table()
+    
+    print("Installed Coding Agents:")
+    print("-" * 80)
+    print(f"{'Name':<15} {'Type':<15} {'Installed':<12} {'Status':<20} {'Executable'}")
+    print("-" * 80)
+    
+    for row in table:
+        installed = "yes" if row["installed"] else "no"
+        executable = row["executable"][:40] + "..." if len(row["executable"]) > 40 else row["executable"]
+        print(f"{row['name']:<15} {row['type']:<15} {installed:<12} {row['status']:<20} {executable}")
+    
+    print(f"\nTotal agents: {len(table)}")
+    installed_count = sum(1 for row in table if row["installed"])
+    print(f"Installed: {installed_count}")
+    
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="munin", description="Munin CLI (embed helpers + agent tools + project capture)"
@@ -312,17 +548,32 @@ def build_parser() -> argparse.ArgumentParser:
     add_p.add_argument("--name", help="Project name (defaults to directory name)")
     add_p.add_argument("--enable-capture", action="store_true", help="Enable capture immediately")
 
-    list_p = proj_sub.add_parser("list", help="List registered projects")
-    list_p.add_argument("--limit", type=int, default=100)
+    list_p = proj_sub.add_parser("list", help="List registered projects (including zero-memory)")
+    list_p.add_argument("--limit", type=int, default=200)
     list_p.add_argument("--offset", type=int, default=0)
+    list_p.add_argument("--include-ignored", action="store_true", help="Also show ignored projects")
 
-    proj_sub.add_parser("scan", help="Scan workspace roots for projects")
+    proj_sub.add_parser("drives", help="Show discovered drives and scan eligibility")
+
+    scan_p = proj_sub.add_parser(
+        "scan",
+        help="Scan eligible drives (and workspace roots) for projects",
+    )
+    scan_p.add_argument("roots", nargs="*", help="Optional explicit roots to scan instead of auto drives")
+    scan_p.add_argument("--no-auto-drives", action="store_true", help="Do not expand to automatic drive discovery")
+    scan_p.add_argument("--verbose", action="store_true", help="Show evidence and skipped-candidate diagnostics")
 
     enable_p = proj_sub.add_parser("enable", help="Enable capture for a project")
     enable_p.add_argument("project_id", help="Project ID or namespace")
 
     disable_p = proj_sub.add_parser("disable", help="Disable capture for a project")
     disable_p.add_argument("project_id", help="Project ID or namespace")
+
+    ignore_p = proj_sub.add_parser("ignore", help="Ignore a project (excluded from scans and default lists)")
+    ignore_p.add_argument("project", help="Project ID or namespace")
+
+    unignore_p = proj_sub.add_parser("unignore", help="Stop ignoring a project")
+    unignore_p.add_argument("project", help="Project ID or namespace")
 
     # Capture commands
     cap = sub.add_parser("capture", help="Capture management")
@@ -349,6 +600,38 @@ def build_parser() -> argparse.ArgumentParser:
     summary_p.add_argument("--no-auto-register", action="store_true", help="Don't auto-register project")
 
     cap_sub.add_parser("status", help="Show capture system status")
+    
+    # Agent session commands (M8.3)
+    cap_sub.add_parser("agent-sessions", help="Show agent session adapter status")
+
+    # Agent run commands (M8.3B)
+    # Convention: munin run [munin flags] -- <agent> [agent args...]
+    # Named Munin flags go BEFORE the agent name.
+    run_p = sub.add_parser(
+        "run",
+        help="Run a coding agent with Munin context injection",
+    )
+    run_p.add_argument("--project", default=None, help="Project path or namespace")
+    run_p.add_argument("--project-id", default=None, help="Project ID")
+    run_p.add_argument("--task", default=None, help="Task description for context targeting")
+    run_p.add_argument("--token-budget", type=int, default=1500, help="Token budget for context")
+    run_p.add_argument("--max-memories", type=int, default=20, help="Max memories for context")
+    run_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be executed without launching",
+    )
+    run_p.add_argument(
+        "agent",
+        nargs=argparse.REMAINDER,
+        help="Agent name and arguments after -- separator",
+    )
+
+    # Agent status command (M8.3B)
+    sub.add_parser(
+        "agents",
+        help="Show installed coding agent status",
+    )
 
     return parser
 
@@ -362,17 +645,23 @@ def main(argv: list[str] | None = None) -> None:
         "health": cmd_health,
         "context": cmd_context,
         "remember": cmd_remember,
+        "run": cmd_run,
+        "agents": cmd_agents,
         "project": {
             "add": cmd_project_add,
             "list": cmd_project_list,
+            "drives": cmd_project_drives,
             "scan": cmd_project_scan,
             "enable": cmd_project_enable,
             "disable": cmd_project_disable,
+            "ignore": cmd_project_ignore,
+            "unignore": cmd_project_unignore,
         },
         "capture": {
             "event": cmd_capture_event,
             "summary": cmd_capture_summary,
             "status": cmd_capture_status,
+            "agent-sessions": cmd_capture_agent_sessions,
         },
     }
 

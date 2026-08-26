@@ -15,6 +15,9 @@ class GenericCaptureBridge(CaptureAdapter):
 
     name = CaptureSource.generic
 
+    # Push-based only: receives events via API/CLI. Never background-polled.
+    supports_polling = False
+
     def __init__(self, project: Project) -> None:
         super().__init__(project)
 

@@ -30,6 +30,79 @@ def _db_factory() -> SessionLocal:
     return SessionLocal()
 
 
+async def _optional_background_discovery() -> None:
+    """Optional, non-blocking discovery scan after API readiness."""
+    import asyncio
+
+    from app.projects.discovery import ProjectDiscoveryService, SCAN_STATUS
+
+    try:
+        def _run() -> None:
+            db = SessionLocal()
+            try:
+                ProjectDiscoveryService(db).run_scan()
+                db.commit()
+            except Exception as exc:  # pragma: no cover - background safety
+                logger.warning("Background project discovery failed: %s", exc)
+            finally:
+                db.close()
+
+        await asyncio.to_thread(_run)
+        logger.info("background project discovery complete (in_progress=%s)", SCAN_STATUS.snapshot()["scan_in_progress"])
+    except Exception as exc:  # pragma: no cover - background safety
+        logger.warning("Background project discovery could not start: %s", exc)
+
+
+async def _agent_session_capture_loop() -> None:
+    """Background task for agent session capture (M8.3)."""
+    import asyncio
+    from app.capture.agent_sessions.service import AgentSessionService
+    from app.config import get_settings
+    
+    settings = get_settings()
+    poll_interval = getattr(settings, "agent_session_poll_seconds", 60)
+    
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                service = AgentSessionService(db)
+                
+                # Discover and process sessions
+                sessions = service.discover_sessions()
+                if sessions:
+                    logger.info("Agent session capture: discovered %d sessions", len(sessions))
+                    for session in sessions:
+                        try:
+                            result = service.process_session(session)
+                            if result.capture_events_created > 0 or result.memories_created > 0:
+                                logger.info(
+                                    "Agent session %s: %d events -> %d captures -> %d memories",
+                                    session.id,
+                                    result.events_discovered,
+                                    result.capture_events_created,
+                                    result.memories_created,
+                                )
+                            if result.errors:
+                                logger.warning("Agent session %s: %d errors", session.id, len(result.errors))
+                        except Exception as e:
+                            logger.error("Error processing session %s: %s", session.id, e)
+                    db.commit()
+                else:
+                    # No sessions found - this is normal
+                    pass
+                
+            except Exception as exc:
+                db.rollback()
+                logger.error("Agent session capture loop error: %s", exc)
+            finally:
+                db.close()
+        except Exception as exc:
+            logger.error("Agent session capture task error: %s", exc)
+        
+        await asyncio.sleep(poll_interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -42,10 +115,26 @@ async def lifespan(app: FastAPI):
     logger.info("database configured")
 
     # Start capture manager
+    import asyncio
+    _background_tasks = []
     async with capture_lifespan(_db_factory):
+        if settings.project_scan_on_start:
+            asyncio.create_task(_optional_background_discovery())
+            logger.info("background project discovery scheduled (non-blocking)")
+        
+        # Start agent session capture background task (M8.3)
+        if getattr(settings, "agent_session_capture_enabled", True):
+            task = asyncio.create_task(_agent_session_capture_loop())
+            _background_tasks.append(task)
+            logger.info("agent session capture background task started (poll every %d seconds)", 
+                       getattr(settings, "agent_session_poll_seconds", 60))
+        
         logger.info("API ready")
         yield
 
+    # Cancel background tasks
+    for task in _background_tasks:
+        task.cancel()
     logger.info("Munin shutting down")
 
 
@@ -58,6 +147,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(api_router)
+    # M8/M8.1 routers are versioned under /api/v1 (the canonical mount used by
+    # the UI); legacy unversioned mounts remain for older local clients.
+    application.include_router(projects_router, prefix="/api/v1")
+    application.include_router(capture_router, prefix="/api/v1")
     application.include_router(projects_router)
     application.include_router(capture_router)
 

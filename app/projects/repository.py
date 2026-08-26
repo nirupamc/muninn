@@ -6,10 +6,11 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.project import Project, ProjectStatus
+from app.projects.paths import canonical_key
 
 
 class ProjectRepository:
@@ -31,6 +32,8 @@ class ProjectRepository:
         status: ProjectStatus = ProjectStatus.discovered,
         capture_enabled: bool = False,
         metadata: dict[str, Any] | None = None,
+        discovery_source: str | None = None,
+        discovery_evidence: list[Any] | None = None,
     ) -> Project:
         """Create a new project."""
         project = Project(
@@ -44,6 +47,9 @@ class ProjectRepository:
             status=status,
             capture_enabled=capture_enabled,
             metadata_=metadata or {},
+            discovery_source=discovery_source,
+            discovery_evidence_json=discovery_evidence or [],
+            last_discovered_at=datetime.now(UTC),
         )
         self.db.add(project)
         self.db.flush()
@@ -59,20 +65,37 @@ class ProjectRepository:
         return self.db.execute(stmt).scalar_one_or_none()
 
     def get_by_canonical_path(self, canonical_path: str) -> Project | None:
-        """Get project by canonical path."""
-        stmt = select(Project).where(Project.canonical_path == canonical_path)
+        """Get project by canonical path (case/separator-insensitive on Windows)."""
+        key = canonical_key(canonical_path)
+        stmt = select(Project).where(func.lower(Project.canonical_path) == key)
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def list_ignored_path_keys(self) -> set[str]:
+        """Canonical keys of ignored projects — pruned from scans."""
+        stmt = select(Project.canonical_path).where(Project.ignored.is_(True))
+        return {canonical_key(p) for p in self.db.execute(stmt).scalars().all()}
+
+    def set_ignored(self, project_id: str, ignored: bool) -> Project | None:
+        """Persistently ignore/unignore a project (never auto re-added)."""
+        project = self.get_by_id(project_id)
+        if project:
+            project.ignored = ignored
+            self.db.flush()
+        return project
 
     def list_all(
         self,
         *,
         status: ProjectStatus | None = None,
         capture_enabled: bool | None = None,
+        include_ignored: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[Project]:
         """List projects with optional filters."""
-        stmt = select(Project).order_by(Project.discovered_at.desc())
+        stmt = select(Project).order_by(Project.name.asc())
+        if not include_ignored:
+            stmt = stmt.where(Project.ignored.is_(False))
         if status is not None:
             stmt = stmt.where(Project.status == status)
         if capture_enabled is not None:
@@ -80,9 +103,11 @@ class ProjectRepository:
         stmt = stmt.limit(limit).offset(offset)
         return self.db.execute(stmt).scalars().all()
 
-    def count(self, *, status: ProjectStatus | None = None) -> int:
+    def count(self, *, status: ProjectStatus | None = None, include_ignored: bool = True) -> int:
         """Count projects with optional filter."""
         stmt = select(Project)
+        if not include_ignored:
+            stmt = stmt.where(Project.ignored.is_(False))
         if status is not None:
             stmt = stmt.where(Project.status == status)
         return len(self.db.execute(stmt).scalars().all())
@@ -111,8 +136,16 @@ class ProjectRepository:
             self.db.flush()
         return project
 
+    def touch_discovered(self, project_id: str, occurred_at: datetime | None = None) -> Project | None:
+        """Record that a rescan re-observed this project."""
+        project = self.get_by_id(project_id)
+        if project:
+            project.last_discovered_at = occurred_at or datetime.now(UTC)
+            self.db.flush()
+        return project
+
     def update_metadata(self, project_id: str, metadata: dict[str, Any]) -> Project | None:
-        """Update project metadata."""
+        """Merge keys into project metadata."""
         project = self.get_by_id(project_id)
         if project:
             project.metadata_.update(metadata)

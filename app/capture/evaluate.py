@@ -10,9 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy.orm import Session
-
-from app.database import SessionLocal, Base, engine
+from app.database import Base
 from app.models.project import Project, ProjectStatus
 from app.models.capture import (
     CaptureEvent,
@@ -56,8 +54,16 @@ def run_evaluation() -> int:
     os.environ["CONSOLIDATION_PROVIDER"] = "deterministic"
     os.environ["EMBEDDING_PROVIDER"] = "deterministic"
 
-    # Create tables
-    Base.metadata.create_all(engine)
+    # Isolate the evaluation against a throwaway DB so the acceptance harness
+    # never mutates the production registry under data/munin.db (mirroring the
+    # isolated-DB behaviour already used by the M8 pytest suite).
+    from sqlalchemy.orm import sessionmaker
+    from app.database import create_db_engine
+
+    eval_dir = tempfile.mkdtemp(prefix="munin_cap_eval_")
+    eval_engine = create_db_engine(f"sqlite:///{eval_dir}/eval.db")
+    Base.metadata.create_all(eval_engine)
+    EvalSession = sessionmaker(bind=eval_engine, autocommit=False, autoflush=False)
 
     results = {
         "project_discovery_success_rate": 0.0,
@@ -94,7 +100,7 @@ def run_evaluation() -> int:
         (root / ".venv").mkdir()
         (root / ".venv" / "pyvenv.cfg").write_text("")
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             settings = get_settings()
@@ -127,7 +133,7 @@ def run_evaluation() -> int:
     # Test 2: Namespace Mapping
     print_header("TEST 2: Namespace Mapping")
     with tempfile.TemporaryDirectory() as tmpdir:
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
 
@@ -166,7 +172,7 @@ def run_evaluation() -> int:
         subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo, capture_output=True)
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             project = service.register_project(str(repo), enable_capture=True)
@@ -210,7 +216,7 @@ def run_evaluation() -> int:
         subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo, capture_output=True)
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             project = service.register_project(str(repo), enable_capture=True)
@@ -248,7 +254,7 @@ def run_evaluation() -> int:
         subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo, capture_output=True)
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             project = service.register_project(str(repo), enable_capture=True)
@@ -290,7 +296,7 @@ def run_evaluation() -> int:
         subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo, capture_output=True)
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             project = service.register_project(str(repo), enable_capture=True)
@@ -340,7 +346,7 @@ def run_evaluation() -> int:
         subprocess.run(["git", "add", "."], cwd=repo, capture_output=True)
         subprocess.run(["git", "commit", "-m", "Initial"], cwd=repo, capture_output=True)
 
-        db = SessionLocal()
+        db = EvalSession()
         try:
             service = ProjectService(db)
             project = service.register_project(str(repo), enable_capture=True)
@@ -365,7 +371,7 @@ def run_evaluation() -> int:
             )
 
             # Simulate process restart - new DB session
-            db2 = SessionLocal()
+            db2 = EvalSession()
             try:
                 resolver = ProjectResolver(db2)
                 project2 = resolver.resolve_by_namespace(project.namespace)

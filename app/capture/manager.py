@@ -85,11 +85,29 @@ class CaptureManager:
             projects = repo.list_all(capture_enabled=True, limit=1000)
 
             for project in projects:
-                self._adapters[project.id] = self._create_adapters(project, db)
+                if project.id not in self._adapters:
+                    self._adapters[project.id] = self._create_adapters(project, db)
+                    logger.info("Attached capture adapters for project %s (%s)", project.id, project.name)
 
             logger.info("Capture manager tracking %d projects", len(self._adapters))
         finally:
             db.close()
+
+    async def attach_project(self, project: Project) -> None:
+        """Dynamically attach capture adapters for a single project."""
+        db = self.db_factory()
+        try:
+            if project.id not in self._adapters:
+                self._adapters[project.id] = self._create_adapters(project, db)
+                logger.info("Dynamically attached capture adapters for project %s (%s)", project.id, project.name)
+        finally:
+            db.close()
+
+    async def detach_project(self, project_id: str) -> None:
+        """Dynamically detach capture adapters for a project."""
+        if project_id in self._adapters:
+            del self._adapters[project_id]
+            logger.info("Detached capture adapters for project %s", project_id)
 
     async def _capture_loop(self) -> None:
         """Main capture loop."""
@@ -122,6 +140,10 @@ class CaptureManager:
         """Process a single project's adapters."""
         adapters = self._adapters.get(project.id, [])
         for adapter in adapters:
+            if not getattr(adapter, "supports_polling", True):
+                # Push-based adapters (e.g. GenericCaptureBridge) must not be
+                # polled; events arrive via API/CLI submissions instead.
+                continue
             try:
                 events = adapter.discover_events(project, db)
                 for event_data in events:
