@@ -102,6 +102,17 @@ class AgentSessionAdapter(ABC):
             and self._checkpoint.last_session_id is None
         )
 
+    def advance_checkpoint(self, timestamp: float, session_id: str | None = None) -> None:
+        """Advance checkpoint timestamp — only moves forward, never regresses.
+
+        When processing multiple sessions, an older session must not overwrite
+        a newer checkpoint timestamp.
+        """
+        if timestamp > self._checkpoint.last_event_timestamp:
+            self._checkpoint.last_event_timestamp = timestamp
+        if session_id is not None:
+            self._checkpoint.last_session_id = session_id
+
     def load_checkpoint(self, project: Project) -> None:
         """Load checkpoint from project metadata."""
         if project.metadata_:

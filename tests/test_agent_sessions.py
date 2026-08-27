@@ -354,7 +354,7 @@ class TestAgentSessionService:
             assert service.db == mock_db
             assert service.normalizer is not None
             assert service._adapters is not None
-            assert len(service._adapters) == 3  # codex, kilo, opencode
+            assert len(service._adapters) == 5  # codex, kilo, opencode, cline, aider
 
     def test_get_available_adapters(self, mock_db: MagicMock) -> None:
         """Test getting available adapters."""
@@ -371,7 +371,7 @@ class TestAgentSessionService:
             service = AgentSessionService(mock_db)
             health = service.get_adapter_health()
             assert isinstance(health, dict)
-            assert len(health) == 3  # codex, kilo, opencode
+            assert len(health) == 5  # codex, kilo, opencode, cline, aider
             for source, info in health.items():
                 assert "name" in info
                 assert "available" in info

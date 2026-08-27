@@ -71,6 +71,8 @@ class AgentRegistry:
 
         # Import and register all adapters
         try:
+            from app.agents.adapters.aider import AiderLaunchAdapter
+            from app.agents.adapters.cline import ClineLaunchAdapter
             from app.agents.adapters.codex import CodexLaunchAdapter
             from app.agents.adapters.kilo import KiloLaunchAdapter
             from app.agents.adapters.opencode import OpenCodeLaunchAdapter
@@ -78,6 +80,8 @@ class AgentRegistry:
             self.register_adapter(AgentType.codex, CodexLaunchAdapter)
             self.register_adapter(AgentType.kilo, KiloLaunchAdapter)
             self.register_adapter(AgentType.opencode, OpenCodeLaunchAdapter)
+            self.register_adapter(AgentType.cline, ClineLaunchAdapter)
+            self.register_adapter(AgentType.aider, AiderLaunchAdapter)
 
             self._initialized = True
             logger.info("Agent registry initialized with %d adapters", len(self.SUPPORTED_AGENTS))

@@ -275,9 +275,9 @@ class OpenCodeAdapter(AgentSessionAdapter):
         return events
 
     def checkpoint(self, session: AgentSession, db: Session, last_event: AgentSessionEvent | None = None) -> None:
-        """Update checkpoint after processing."""
-        self._checkpoint.last_session_id = session.external_session_id
-        self._checkpoint.last_event_timestamp = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        """Update checkpoint after processing — only advances, never regresses."""
+        ts = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        self.advance_checkpoint(ts, session.external_session_id)
         if session.ended_at:
             session.status = AgentSessionStatus.finished
         if self.project:

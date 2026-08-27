@@ -223,9 +223,16 @@ class CodexAdapter(AgentSessionAdapter):
                 if not external_session_id:
                     continue
                 
-                # Check if we've already processed this session
+                # Skip already-processed session (by ID)
                 if self._checkpoint.last_session_id == external_session_id:
                     continue
+
+                # Skip sessions whose last event is older than checkpoint
+                # (prevents replay of previously-processed sessions)
+                if events and self._checkpoint.last_event_timestamp > 0:
+                    last_event_ts = events[-1].get("occurred_at")
+                    if last_event_ts and last_event_ts.timestamp() <= self._checkpoint.last_event_timestamp:
+                        continue
                 
                 # Get first and last event timestamps
                 if events:
@@ -319,9 +326,9 @@ class CodexAdapter(AgentSessionAdapter):
         return events
 
     def checkpoint(self, session: AgentSession, db: Session, last_event: AgentSessionEvent | None = None) -> None:
-        """Update checkpoint after processing."""
-        self._checkpoint.last_session_id = session.external_session_id
-        self._checkpoint.last_event_timestamp = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        """Update checkpoint after processing — only advances, never regresses."""
+        ts = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        self.advance_checkpoint(ts, session.external_session_id)
         
         # Also track file offset for incremental reads
         # For Codex JSONL files, we can track by file mtime

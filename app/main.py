@@ -70,27 +70,39 @@ async def _agent_session_capture_loop() -> None:
                 
                 # Discover and process sessions
                 sessions = service.discover_sessions()
-                if sessions:
-                    logger.info("Agent session capture: discovered %d sessions", len(sessions))
-                    for session in sessions:
-                        try:
-                            result = service.process_session(session)
-                            if result.capture_events_created > 0 or result.memories_created > 0:
-                                logger.info(
-                                    "Agent session %s: %d events -> %d captures -> %d memories",
-                                    session.id,
-                                    result.events_discovered,
-                                    result.capture_events_created,
-                                    result.memories_created,
-                                )
-                            if result.errors:
-                                logger.warning("Agent session %s: %d errors", session.id, len(result.errors))
-                        except Exception as e:
-                            logger.error("Error processing session %s: %s", session.id, e)
-                    db.commit()
-                else:
-                    # No sessions found - this is normal
-                    pass
+                logger.info(
+                    "Agent session poll: discovered %d sessions",
+                    len(sessions),
+                )
+                total_events = 0
+                total_captures = 0
+                total_memories = 0
+                for session in sessions:
+                    try:
+                        result = service.process_session(session)
+                        total_events += result.events_discovered
+                        total_captures += result.capture_events_created
+                        total_memories += result.memories_created
+                        if result.capture_events_created > 0 or result.memories_created > 0:
+                            logger.info(
+                                "Agent session %s: %d events -> %d captures -> %d memories",
+                                session.external_session_id[:16],
+                                result.events_discovered,
+                                result.capture_events_created,
+                                result.memories_created,
+                            )
+                        if result.errors:
+                            logger.warning("Agent session %s: %d errors", session.external_session_id[:16], len(result.errors))
+                    except Exception as e:
+                        logger.error("Error processing session %s: %s", session.external_session_id[:16], e)
+                if total_events > 0 or total_captures > 0 or total_memories > 0:
+                    logger.info(
+                        "Agent session poll summary: events=%d captures=%d memories=%d",
+                        total_events,
+                        total_captures,
+                        total_memories,
+                    )
+                db.commit()
                 
             except Exception as exc:
                 db.rollback()

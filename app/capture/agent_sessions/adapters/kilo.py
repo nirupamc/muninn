@@ -320,10 +320,9 @@ class KiloAdapter(AgentSessionAdapter):
         db: Session,
         last_event: AgentSessionEvent | None = None,
     ) -> None:
-        """Update checkpoint after processing."""
-        # Update session checkpoint
-        self._checkpoint.last_session_id = session.external_session_id
-        self._checkpoint.last_event_timestamp = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        """Update checkpoint after processing — only advances, never regresses."""
+        ts = last_event.occurred_at.timestamp() if last_event else session.last_seen_at.timestamp()
+        self.advance_checkpoint(ts, session.external_session_id)
         
         # Update session status
         if session.ended_at:

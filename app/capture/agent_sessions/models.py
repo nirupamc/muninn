@@ -15,6 +15,8 @@ class AgentSessionSource(str, enum.Enum):
     codex = "codex"
     kilo = "kilo"
     opencode = "opencode"
+    cline = "cline"
+    aider = "aider"
     generic = "generic"
 
 

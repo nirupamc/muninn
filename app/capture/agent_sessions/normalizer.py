@@ -103,6 +103,19 @@ class SessionNormalizer:
         r"^what is\b",
     ]
 
+    # Secret/credential patterns — reject before durable memory
+    # NOTE: (?i) flags removed from patterns; use re.IGNORECASE at compile time
+    SECRET_PATTERNS = [
+        r"(api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*\S+",
+        r"(password|passwd|pwd)\s*[=:]\s*\S+",
+        r"sk-[a-zA-Z0-9_-]{20,}",
+        r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
+        r"-----BEGIN\s+EC\s+PRIVATE\s+KEY-----",
+        r"(OPENAI|ANTHROPIC|GITHUB|AWS)_API_KEY\s*=\s*\S+",
+        r"DATABASE_URL\s*=\s*\S+",
+        r"(private[_-]?key|client[_-]?secret)\s*[=:]\s*\S+",
+    ]
+
     # Tool result patterns
     TOOL_SUCCESS_PATTERNS = [
         r"passed\b",
@@ -129,8 +142,33 @@ class SessionNormalizer:
         self._blocker_re = re.compile("|".join(self.BLOCKER_PATTERNS), re.IGNORECASE)
         self._constraint_re = re.compile("|".join(self.CONSTRAINT_PATTERNS), re.IGNORECASE)
         self._trivial_re = re.compile("|".join(self.TRIVIAL_PATTERNS), re.IGNORECASE)
+        self._secret_re = re.compile("|".join(self.SECRET_PATTERNS), re.IGNORECASE)
         self._tool_success_re = re.compile("|".join(self.TOOL_SUCCESS_PATTERNS), re.IGNORECASE)
         self._tool_failure_re = re.compile("|".join(self.TOOL_FAILURE_PATTERNS), re.IGNORECASE)
+
+    def contains_secret(self, content: str | list | dict | None) -> bool:
+        """Check if content contains secrets or credentials.
+
+        Returns True if the content looks like it contains API keys,
+        passwords, private keys, or other sensitive data that should
+        NOT be stored as durable memory.
+        """
+        if content is None:
+            return False
+
+        if isinstance(content, list):
+            content = " ".join(str(item) for item in content)
+
+        if isinstance(content, dict):
+            content = str(content)
+
+        if not isinstance(content, str):
+            content = str(content)
+
+        if not content:
+            return False
+
+        return bool(self._secret_re.search(content))
 
     def is_trivial(self, content: str | list | dict | None) -> bool:
         """Check if content is trivial and should be ignored."""
@@ -285,6 +323,14 @@ class SessionNormalizer:
         
         # Skip trivial events
         if self.is_trivial(normalized_event.content):
+            return None
+
+        # Skip secret/credential content
+        if self.contains_secret(normalized_event.content):
+            logger.info(
+                "Rejected event with secret content from session %s",
+                session.id,
+            )
             return None
         
         # Classify the event

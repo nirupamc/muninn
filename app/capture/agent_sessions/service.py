@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.capture.agent_sessions.adapters import (
     AgentSessionAdapter,
+    AiderAdapter,
+    ClineAdapter,
     CodexAdapter,
     KiloAdapter,
     OpenCodeAdapter,
@@ -64,6 +66,8 @@ class AgentSessionService:
         CodexAdapter,
         KiloAdapter,
         OpenCodeAdapter,
+        ClineAdapter,
+        AiderAdapter,
     ]
 
     def __init__(self, db: Session) -> None:
@@ -224,6 +228,9 @@ class AgentSessionService:
             )
         
         try:
+            # Set adapter project so checkpoint() can persist
+            adapter.project = target_project
+
             # Load checkpoint
             adapter.load_checkpoint(target_project)
             
@@ -231,6 +238,16 @@ class AgentSessionService:
             events = adapter.read_new_events(session, self.db)
             events_discovered = len(events)
             
+            logger.info(
+                "[agent-session] adapter=%s session=%s ns=%s checkpoint_ts=%.1f events_raw=%d new_events=%d",
+                session.source.value,
+                session.external_session_id[:16],
+                target_project.namespace,
+                adapter._checkpoint.last_event_timestamp,
+                session.metadata.get("event_count", 0),
+                events_discovered,
+            )
+
             if not events:
                 logger.info("No new events for session %s", session.id)
                 # Still update checkpoint to mark as processed
@@ -250,6 +267,12 @@ class AgentSessionService:
                     capture_data = self.normalizer.build_capture_event(session, event)
                     
                     if capture_data:
+                        evt_type = capture_data.get("metadata", {}).get("agent_session_event_type", "?")
+                        logger.info(
+                            "[normalize] event=%s classification=%s candidate=yes",
+                            event.external_event_id or event.id[:8],
+                            evt_type,
+                        )
                         # Create capture event through the service
                         capture_event = self._create_capture_event(
                             target_project, capture_data
@@ -259,6 +282,23 @@ class AgentSessionService:
                         # Check if a memory was created
                         if capture_event.memory_id:
                             memories_created += 1
+                            logger.info(
+                                "[capture] event_id=%s status=STORE memory_id=%s",
+                                capture_event.id[:8],
+                                capture_event.memory_id[:8],
+                            )
+                        else:
+                            decision = getattr(capture_event, 'admission_decision', '?')
+                            logger.info(
+                                "[capture] event_id=%s status=%s",
+                                capture_event.id[:8],
+                                decision,
+                            )
+                    else:
+                        logger.debug(
+                            "[normalize] event=%s trivial/secret — ignored",
+                            event.external_event_id or event.id[:8],
+                        )
                     
                     events_processed += 1
                     
@@ -274,6 +314,12 @@ class AgentSessionService:
             # Update checkpoint after processing all events
             last_event = events[-1] if events else None
             adapter.checkpoint(session, self.db, last_event)
+            logger.info(
+                "[checkpoint] adapter=%s session=%s saved ts=%.1f",
+                session.source.value,
+                session.external_session_id[:16],
+                adapter._checkpoint.last_event_timestamp,
+            )
             
             # Update session status
             if session.ended_at:
