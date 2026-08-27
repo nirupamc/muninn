@@ -102,16 +102,34 @@ class AgentRunner:
           2. current working directory → registry lookup
           3. nearest registered project root
         """
+        logger.info(
+            "[_resolve_project] START project_path=%r project_id=%r namespace=%r cwd=%s",
+            self.config.project_path,
+            self.config.project_id,
+            self.config.namespace,
+            os.getcwd(),
+        )
         # 1. Explicit --project argument
         if self.config.project_path:
             resolved = self._resolve_explicit_project(self.config.project_path)
             if resolved:
+                logger.info(
+                    "[_resolve_project] RESOLVED via explicit path: namespace=%r name=%r path=%r",
+                    self._resolved_namespace,
+                    self._resolved_project_name,
+                    self._resolved_project_path,
+                )
                 return
 
         # 2. Try current working directory
         cwd = os.getcwd()
         resolved = self._resolve_from_path(cwd)
         if resolved:
+            logger.info(
+                "[_resolve_project] RESOLVED via cwd: namespace=%r name=%r",
+                self._resolved_namespace,
+                self._resolved_project_name,
+            )
             return
 
         # 3. No project resolved — proceed without one (namespace = "default")
@@ -119,9 +137,9 @@ class AgentRunner:
         self._resolved_project_name = Path(cwd).name
         self._resolved_project_path = Path(cwd)
         logger.info(
-            "No registered project found for cwd=%s, using namespace=%s",
-            cwd,
+            "[_resolve_project] FALLBACK to cwd: namespace=%r name=%r",
             self._resolved_namespace,
+            self._resolved_project_name,
         )
 
     def _resolve_explicit_project(self, project_arg: str) -> bool:
@@ -287,6 +305,14 @@ class AgentRunner:
         # Build a query from task or use a generic one
         query = self.config.task or f"project context for {self._resolved_project_name or 'current project'}"
 
+        logger.info(
+            "[_assemble_context] START namespace=%r query=%r token_budget=%d max_memories=%d",
+            namespace,
+            query,
+            self.config.token_budget,
+            self.config.max_memories,
+        )
+
         try:
             from app.database import SessionLocal
             from app.context.service import ContextService
@@ -295,6 +321,13 @@ class AgentRunner:
             db = SessionLocal()
             try:
                 service = ContextService(db)
+                provider = service.provider
+                logger.info(
+                    "[_assemble_context] provider=%s model=%s dimension=%s",
+                    getattr(provider, "provider_name", "?"),
+                    getattr(provider, "model_name", "?"),
+                    getattr(provider, "dimension", "?"),
+                )
                 request = ContextRequest(
                     query=query,
                     namespace=namespace,
@@ -303,16 +336,66 @@ class AgentRunner:
                 )
                 response = service.assemble(request)
                 logger.info(
-                    "M5 context assembled: %d memories, %d tokens, truncated=%s",
+                    "[_assemble_context] RESULT memories=%d tokens=%d truncated=%s context_len=%d",
                     len(response.memories_used),
                     response.estimated_tokens,
                     response.truncated,
+                    len(response.context),
                 )
+                if response.memories_used:
+                    for i, mem in enumerate(response.memories_used):
+                        logger.info(
+                            "[_assemble_context]   memory[%d] id=%s type=%s score=%.3f content_preview=%.80s",
+                            i,
+                            mem.memory_id,
+                            mem.memory_type,
+                            mem.final_score,
+                            mem.content,
+                        )
+                else:
+                    # Check if stored embeddings use a different provider
+                    from sqlalchemy import func, text as sa_text
+                    mismatch_check = db.execute(
+                        sa_text(
+                            "SELECT provider, model_name, dimension, COUNT(*) "
+                            "FROM memory_embeddings "
+                            "WHERE memory_id IN "
+                            "  (SELECT id FROM memories WHERE namespace = :ns) "
+                            "GROUP BY provider, model_name, dimension"
+                        ),
+                        {"ns": namespace},
+                    ).fetchall()
+                    if mismatch_check:
+                        stored_info = ", ".join(
+                            f"provider={r[0]} model={r[1]} dim={r[2]} ({r[3]} embeddings)"
+                            for r in mismatch_check
+                        )
+                        logger.warning(
+                            "[_assemble_context] ZERO memories for namespace=%r. "
+                            "Provider MISMATCH detected! Active provider=%s/%s/dim=%d, "
+                            "but stored embeddings use: %s. "
+                            "Run 'munin embed-memories' to re-embed with the active provider.",
+                            namespace,
+                            provider.provider_name,
+                            provider.model_name,
+                            provider.dimension,
+                            stored_info,
+                        )
+                    else:
+                        logger.warning(
+                            "[_assemble_context] ZERO memories returned for namespace=%r — "
+                            "no embeddings found. Check DB content.",
+                            namespace,
+                        )
                 return response.context, response
             finally:
                 db.close()
         except Exception as e:
-            logger.warning("M5 context assembly failed (proceeding with empty): %s", e)
+            logger.error(
+                "[_assemble_context] EXCEPTION (falling back to empty): %s",
+                e,
+                exc_info=True,
+            )
             # Return empty context — don't fail the entire run
             from app.schemas.context import ContextResponse
             empty = ContextResponse(
@@ -340,6 +423,13 @@ class AgentRunner:
         )
         from app.sdk.models import AgentContext, MuninMemory
 
+        logger.info(
+            "[_build_briefing] START project=%r namespace=%r context_response.memories_used=%d",
+            self._resolved_project_name,
+            self._resolved_namespace,
+            len(context_response.memories_used),
+        )
+
         # Convert ContextResponse memories to AgentContext for briefing
         memories = []
         for mem in context_response.memories_used:
@@ -366,6 +456,12 @@ class AgentRunner:
             project_path=str(self._resolved_project_path) if self._resolved_project_path else None,
             namespace=self._resolved_namespace,
             context=agent_context,
+        )
+
+        logger.info(
+            "[_build_briefing] RESULT memory_count=%d briefing_len=%d",
+            briefing.memory_count,
+            len(briefing.briefing_text),
         )
 
         return briefing.briefing_text
@@ -452,6 +548,12 @@ class AgentRunner:
         """Launch the agent with context injection."""
         # Set up Ctrl+C handling
         original_handler = signal.getsignal(signal.SIGINT)
+
+        logger.info(
+            "[_launch] BRIEFING len=%d preview=%.200s",
+            len(briefing),
+            briefing,
+        )
 
         def _sigint_handler(signum: int, frame: Any) -> None:
             """Forward SIGINT to child process."""
