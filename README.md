@@ -127,8 +127,7 @@ OpenCode / local LLM
   ↓ continues from durable project state
 ```
 
-**Current integration:** Codex / Kilo Code / OpenCode connect through Munin's generic capture API/CLI.
-**Native tool-specific hooks are not yet implemented**—the bridge is the supported path today.
+**Integrations:** Codex, Kilo, OpenCode, Cline, Aider — each with native session capture adapters and context injection launch adapters.
 
 ---
 
@@ -232,8 +231,8 @@ curl -X POST http://127.0.0.1:8000/api/v1/capture/events/agent-summary \
   -d '{"project_path": "C:\Projects\Muninn", "agent_id": "codex", "session_id": "s-1", "summary": "..."}'
 ```
 
-This is the current integration mechanism for Codex / Kilo Code / OpenCode / custom agents.
-Native adapters are planned.
+Native session adapters are available for Codex, Kilo, OpenCode, Cline, and Aider.
+The capture API/CLI remains available for custom integrations.
 
 ---
 
@@ -241,37 +240,40 @@ Native adapters are planned.
 
 | Suite | Result |
 |-------|--------|
-| Backend tests | 263 passing |
-| M8 capture evaluation | 9/9 passed |
+| Backend tests | 154 passing (targeted suites) |
+| Agent session eval | 7/7 passed |
+| Capture eval | 9/9 passed, safety targets met |
 | Admission | 28 cases, 100% accuracy |
 | Deduplication | 32 cases, 100% accuracy, 0 false merges |
 | Temporal | 35 cases, 94.3% accuracy, 0 false supersedes |
 | Context | 31 cases, 100% top-1 accuracy |
-| Agent integration | 16 cases loaded |
 
 **Safety targets met:**
-- Duplicate captures: 0
+- Duplicate agent captures: 0
 - Namespace leaks: 0
 - Secret captures: 0
-- Git replay: 0
-- Cross-agent continuity: 100%
+- Session replay: 0
+- Agent session adapters: 5 (Codex, Kilo, OpenCode, Cline, Aider)
 
 ---
 
 ## Limitations
 
-- Codex / Kilo Code / OpenCode native hooks **not implemented** — generic bridge used
+- **M8.3A live E2E acceptance deferred** — pipeline-level session capture is verified; fresh live session → durable memory requires manual execution
+- **Live cross-agent retrieval of newly session-derived memory deferred** — context injection works; session-derived cross-agent continuity is a future acceptance item
+- Session capture depends on third-party agent local storage formats
 - Filesystem monitoring is polling-based (debounce window), not native OS events
 - Git capture tracks current branch only
 - Project discovery depth bounded (default 3 levels)
 - Windows is the primary verified platform
 - Not production-hardened; no auth, no distributed deployment
+- Old development DB may contain historical duplicate artifacts from early ingestion
 
 ---
 
 ## Roadmap
 
-- Native Codex / Kilo Code / OpenCode integrations
+- Full live session-derived cross-agent acceptance
 - Native filesystem watcher (watchdog / ReadDirectoryChangesW)
 - Windows background service / desktop packaging
 - MCP (Model Context Protocol) integration

@@ -126,6 +126,10 @@ class AgentSessionService:
                 # Load checkpoint for this adapter
                 if project:
                     adapter.load_checkpoint(project)
+                else:
+                    # Load max checkpoint across all projects so adapter
+                    # can filter already-processed sessions
+                    self._load_max_checkpoint(adapter)
                 
                 discovered = adapter.discover_sessions(self.db)
                 
@@ -159,6 +163,39 @@ class AgentSessionService:
                 )
         
         return sessions
+
+    def _load_max_checkpoint(self, adapter: AgentSessionAdapter) -> None:
+        """Load the maximum checkpoint across all projects for this adapter.
+
+        This ensures the adapter can filter already-processed sessions
+        even when discover_sessions() is called without a specific project.
+        """
+        from app.projects.repository import ProjectRepository
+        import json
+
+        repo = ProjectRepository(self.db)
+        projects = repo.list_all()
+
+        max_ts = 0.0
+        max_session_id = None
+
+        for project in projects:
+            meta = project.metadata_ or {}
+            cp_key = f"{adapter.name.value}_checkpoint"
+            if cp_key in meta:
+                cp_data = meta[cp_key]
+                cp = json.loads(cp_data) if isinstance(cp_data, str) else cp_data
+                ts = cp.get("last_event_timestamp", 0.0)
+                if ts > max_ts:
+                    max_ts = ts
+                    max_session_id = cp.get("last_session_id")
+
+        if max_ts > 0 and max_session_id:
+            from app.capture.agent_sessions.checkpoints import AgentSessionCheckpoint
+            adapter._checkpoint = AgentSessionCheckpoint(
+                last_session_id=max_session_id,
+                last_event_timestamp=max_ts,
+            )
 
     def _resolve_project(self, project_path: str) -> Project | None:
         """Resolve a project path to a Project registry entry."""
