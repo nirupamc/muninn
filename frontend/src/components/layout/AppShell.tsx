@@ -5,7 +5,7 @@ import { BottomBar } from "./BottomBar";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="operations-shell flex h-screen w-screen flex-col overflow-hidden bg-[var(--munin-bg)]">
+    <div className="operations-shell flex h-full w-full flex-col overflow-hidden bg-[var(--munin-bg)]">
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />

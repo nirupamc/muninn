@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     kilo_capture_enabled: bool = True
     opencode_capture_enabled: bool = True
 
+    # M11 — Hybrid Retrieval
+    retrieval_mode: str = "dense"  # dense | lexical | hybrid
+    retrieval_rrf_k: int = 60  # RRF constant
+    retrieval_graph_enabled: bool = True  # Enable graph traversal in hybrid mode
+
 
 @lru_cache
 def get_settings() -> Settings:

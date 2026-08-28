@@ -31,6 +31,8 @@ from app.embeddings.vector_utils import cosine_similarity, deserialize_vector
 from app.models.memory import Memory, MemoryStatus, MemoryType
 from app.repositories.deduplication_repository import DeduplicationRepository
 from app.repositories.embedding_repository import EmbeddingRepository
+from app.retrieval.models import HybridRetrievalResult, RetrievalMode
+from app.retrieval.service import HybridRetriever
 
 if TYPE_CHECKING:
     pass
@@ -80,6 +82,9 @@ class ContextAssembler:
         self.estimator = SimpleTokenEstimator()
         self._embedding_repo = EmbeddingRepository(db)
         self._dedup_repo = DeduplicationRepository(db)
+        # M11: Hybrid retriever (lazy init on first use)
+        self._hybrid_retriever: HybridRetriever | None = None
+        self._retrieval_mode: RetrievalMode | None = None
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -111,7 +116,20 @@ class ContextAssembler:
         """
         t_start = datetime.now(UTC)
 
-        # 1. Embed query once
+        # M11: Use hybrid retrieval if configured
+        hybrid_result: HybridRetrievalResult | None = None
+        if self._retrieval_mode and self._retrieval_mode != RetrievalMode.DENSE:
+            hybrid_result = self._run_hybrid_retrieval(
+                query=query,
+                namespace=namespace,
+                user_id=user_id,
+                agent_id=agent_id,
+                memory_types=memory_types,
+                include_superseded=include_superseded,
+                limit=max_candidates,
+            )
+
+        # 1. Embed query once (always needed for dense component or fallback)
         query_vector = self.provider.embed_text(query)
 
         # 2. Retrieve candidates
@@ -134,6 +152,14 @@ class ContextAssembler:
             [m.id for m, _ in raw_candidates]
         )
 
+        # M11: Build a lookup for hybrid scores if available
+        hybrid_score_lookup: dict[str, float] = {}
+        hybrid_channel_lookup: dict[str, int] = {}
+        if hybrid_result and hybrid_result.candidates:
+            for fc in hybrid_result.candidates:
+                hybrid_score_lookup[fc.memory_id] = fc.rrf_score
+                hybrid_channel_lookup[fc.memory_id] = fc.channel_count
+
         for memory, embedding_row in raw_candidates:
             # Temporal validity filter
             skip_reason = self._temporal_validity_skip(memory, as_of, include_superseded)
@@ -144,15 +170,49 @@ class ContextAssembler:
             stored_vec = deserialize_vector(embedding_row.embedding)
             sem_score = float(cosine_similarity(query_vector, stored_vec))
 
+            # M11: Blend semantic score with hybrid RRF score if available
+            effective_semantic = sem_score
+            if memory.id in hybrid_score_lookup:
+                # Combine: 70% original semantic + 30% RRF boost
+                rrf_boost = hybrid_score_lookup[memory.id]
+                effective_semantic = min(1.0, sem_score * 0.7 + rrf_boost * 0.3)
+
             candidate = score_candidate(
                 memory=memory,
-                semantic_score=sem_score,
+                semantic_score=effective_semantic,
                 reinforcement_count=reinforcement_counts.get(memory.id, 0),
                 query=query,
                 as_of=as_of,
                 config=self.config,
             )
             scored.append(candidate)
+
+        # M11: Also add candidates that came ONLY from lexical/graph (not in dense)
+        if hybrid_result and hybrid_result.candidates:
+            dense_ids = {m.id for m, _ in raw_candidates}
+            for fc in hybrid_result.candidates:
+                if fc.memory_id not in dense_ids:
+                    # This candidate came only from lexical/graph — load it
+                    from app.models.memory import Memory as MemoryModel
+
+                    mem = self.db.get(MemoryModel, fc.memory_id)
+                    if mem is not None:
+                        # Apply temporal filter
+                        skip_reason = self._temporal_validity_skip(mem, as_of, include_superseded)
+                        if skip_reason:
+                            skip_map.setdefault(mem.id, []).append(skip_reason.value)
+                            continue
+
+                        # Score with hybrid RRF as semantic proxy
+                        candidate = score_candidate(
+                            memory=mem,
+                            semantic_score=fc.rrf_score,
+                            reinforcement_count=reinforcement_counts.get(mem.id, 0),
+                            query=query,
+                            as_of=as_of,
+                            config=self.config,
+                        )
+                        scored.append(candidate)
 
         # Limit to max_candidates before expensive steps
         scored = sort_candidates(scored)[:max_candidates]
@@ -163,13 +223,14 @@ class ContextAssembler:
         )
         skip_map.update(redundant_skipped)
 
-        # 6. Select within budget
+        # 6. Select within budget (M10: hierarchical representation selection)
         selected, used_tokens, truncated, budget_skipped = select_within_budget(
             ranked=deduplicated,
             max_memories=max_memories,
             token_budget=token_budget,
             estimator=self.estimator,
             header=CONTEXT_HEADER,
+            hierarchical=True,
         )
         skip_map.update(budget_skipped)
 
@@ -182,11 +243,53 @@ class ContextAssembler:
         # Re-estimate tokens on the actual final string
         final_tokens = self.estimator.count(context_text)
 
+        # Build M10 representation trace
+        from app.context.models import RepresentationTraceEntry
+        from app.memory.representations.models import RepresentationLevel
+
+        rep_trace: list[RepresentationTraceEntry] = []
+        for rank, mem in enumerate(selected, start=1):
+            available_levels: list[RepresentationLevel] = [RepresentationLevel.L2_FULL]
+            if mem.representation_level == RepresentationLevel.L0_GIST:
+                available_levels = [RepresentationLevel.L0_GIST, RepresentationLevel.L2_FULL]
+            elif mem.representation_level == RepresentationLevel.L1_SUMMARY:
+                available_levels = [RepresentationLevel.L1_SUMMARY, RepresentationLevel.L2_FULL]
+
+            rep_trace.append(
+                RepresentationTraceEntry(
+                    memory_id=mem.memory_id,
+                    selected_level=mem.representation_level,
+                    available_levels=available_levels,
+                    token_cost=mem.estimated_tokens,
+                    importance=mem.importance,
+                    final_rank=rank,
+                    selection_reason=mem.selection_reason,
+                )
+            )
+
+        # M11: Build retrieval trace from hybrid result
+        from app.context.models import RetrievalTraceEntry
+
+        retrieval_trace_entries: list[RetrievalTraceEntry] = []
+        if hybrid_result:
+            for rt in hybrid_result.traces:
+                retrieval_trace_entries.append(
+                    RetrievalTraceEntry(
+                        source=rt.source.value,
+                        candidate_count=rt.candidate_count,
+                        hit_count=len(rt.hits),
+                        elapsed_seconds=rt.elapsed_seconds,
+                        error=rt.error,
+                    )
+                )
+
         trace = AssemblyTrace(
             candidate_count=len(raw_candidates),
             selected_count=len(selected),
             skipped=skip_map,
             conflict_pairs=conflict_pairs,
+            representation_trace=rep_trace,
+            retrieval_trace=retrieval_trace_entries,
         )
 
         elapsed = (datetime.now(UTC) - t_start).total_seconds()
@@ -202,6 +305,41 @@ class ContextAssembler:
         )
 
         return selected, context_text, final_tokens, truncated, trace
+
+    # ------------------------------------------------------------------
+    # M11: Hybrid retrieval
+    # ------------------------------------------------------------------
+
+    def set_retrieval_mode(self, mode: RetrievalMode) -> None:
+        """Set the retrieval mode for this assembler instance."""
+        self._retrieval_mode = mode
+        if mode != RetrievalMode.DENSE and self._hybrid_retriever is None:
+            self._hybrid_retriever = HybridRetriever(self.db, self.provider, mode=mode)
+
+    def _run_hybrid_retrieval(
+        self,
+        *,
+        query: str,
+        namespace: str,
+        user_id: str | None,
+        agent_id: str | None,
+        memory_types: list[MemoryType] | None,
+        include_superseded: bool,
+        limit: int,
+    ) -> HybridRetrievalResult:
+        """Run hybrid retrieval and return the result."""
+        if self._hybrid_retriever is None:
+            self._hybrid_retriever = HybridRetriever(self.db, self.provider, mode=self._retrieval_mode)
+
+        return self._hybrid_retriever.search(
+            query=query,
+            namespace=namespace,
+            user_id=user_id,
+            agent_id=agent_id,
+            memory_types=memory_types,
+            include_superseded=include_superseded,
+            limit=limit,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

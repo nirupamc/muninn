@@ -13,6 +13,8 @@ export interface MemoryNode {
   id: string;
   label: string;
   content: string;
+  gist: string | null;
+  summary: string | null;
   memoryType: import("./api").MemoryType;
   status: import("./api").MemoryStatus;
   importance: number;

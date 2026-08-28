@@ -28,6 +28,12 @@ class ContextRequest(BaseModel):
 
     as_of: datetime | None = None
 
+    # M11 — Hybrid retrieval
+    retrieval_mode: str | None = Field(
+        default=None,
+        description="dense | lexical | hybrid. None = use server default.",
+    )
+
     @field_validator("query")
     @classmethod
     def query_must_not_be_blank(cls, value: str) -> str:
@@ -88,6 +94,9 @@ class MemoryUsed(BaseModel):
     final_score: float
     estimated_tokens: int
     reason_codes: list[str] = Field(default_factory=list)
+    # M10 — Hierarchical representation trace
+    representation_level: str | None = None
+    selection_reason: str | None = None
 
 
 class ContextResponse(BaseModel):

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api import admission, agent, consolidation, context, events, memories
+from app.api import admission, agent, consolidation, context, debug, events, memories
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(events.router)
@@ -14,3 +14,5 @@ api_router.include_router(context.router)
 api_router.include_router(consolidation.router)
 # M7A agent-facing endpoints.
 api_router.include_router(agent.router)
+# M13 debug endpoints (read-only).
+api_router.include_router(debug.router)

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from app.memory.representations.models import RepresentationLevel
 from app.models.memory import Memory, MemoryType
 
 
@@ -62,6 +63,9 @@ class SelectedMemory:
     final_score: float
     estimated_tokens: int
     reason_codes: list[str] = field(default_factory=list)
+    # M10 — Hierarchical representation trace
+    representation_level: RepresentationLevel = RepresentationLevel.L2_FULL
+    selection_reason: str = "default_l2"
 
 
 @dataclass
@@ -75,6 +79,30 @@ class ConflictPair:
 
 
 @dataclass
+class RepresentationTraceEntry:
+    """Trace of representation selection for one memory."""
+
+    memory_id: str
+    selected_level: RepresentationLevel
+    available_levels: list[RepresentationLevel]
+    token_cost: int
+    importance: float
+    final_rank: int
+    selection_reason: str
+
+
+@dataclass
+class RetrievalTraceEntry:
+    """Trace of one retrieval channel's contribution."""
+
+    source: str  # dense | lexical | graph
+    candidate_count: int
+    hit_count: int = 0
+    elapsed_seconds: float = 0.0
+    error: str | None = None
+
+
+@dataclass
 class AssemblyTrace:
     """Internal trace of assembly decisions."""
 
@@ -82,6 +110,10 @@ class AssemblyTrace:
     selected_count: int
     skipped: dict[str, list[str]] = field(default_factory=dict)
     conflict_pairs: list[ConflictPair] = field(default_factory=list)
+    # M10 — Representation trace
+    representation_trace: list[RepresentationTraceEntry] = field(default_factory=list)
+    # M11 — Retrieval trace
+    retrieval_trace: list[RetrievalTraceEntry] = field(default_factory=list)
 
 
 @dataclass

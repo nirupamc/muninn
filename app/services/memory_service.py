@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,8 @@ from app.repositories.event_repository import EventRepository
 from app.repositories.memory_repository import MemoryRepository
 from app.schemas.memory import MemoryCreate, MemorySearchRequest, MemorySearchResponse, MemoryUpdate
 from app.services.embedding_service import EmbeddingService
+
+logger = logging.getLogger("munin.memory")
 
 
 class MemoryService:
@@ -53,6 +57,19 @@ class MemoryService:
         try:
             memory = self.repo.create(memory, commit=False)
             self.embedding_service.embed_memory(memory, commit=False)
+
+            # M10: Generate hierarchical representations (failure-safe)
+            try:
+                from app.memory.representations.service import RepresentationService
+                repr_service = RepresentationService(self.db)
+                repr_service.generate_for_memory(memory)
+            except Exception as exc:
+                logger.warning(
+                    "Representation generation failed for new memory %s (non-fatal): %s",
+                    memory.id,
+                    exc,
+                )
+
             if commit:
                 self.db.commit()
                 self.db.refresh(memory)
@@ -115,6 +132,17 @@ class MemoryService:
             memory = self.repo.update(memory, updates, commit=False)
             if content_changed:
                 self.embedding_service.embed_memory(memory, commit=False)
+                # M10: Regenerate representations when content changes
+                try:
+                    from app.memory.representations.service import RepresentationService
+                    repr_service = RepresentationService(self.db)
+                    repr_service.generate_for_memory(memory)
+                except Exception as exc:
+                    logger.warning(
+                        "Representation regeneration failed for memory %s (non-fatal): %s",
+                        memory.id,
+                        exc,
+                    )
             self.db.commit()
             self.db.refresh(memory)
             return memory

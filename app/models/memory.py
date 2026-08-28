@@ -61,6 +61,11 @@ class Memory(Base):
     agent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # M10 — Hierarchical representation fields
+    gist: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     memory_type: Mapped[MemoryType] = mapped_column(
         Enum(MemoryType, name="memory_type", native_enum=False),
         nullable=False,

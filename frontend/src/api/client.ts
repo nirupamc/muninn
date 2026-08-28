@@ -271,4 +271,27 @@ export const api = {
     request<import("../types/api").CaptureStatusResponse>(
       "/api/v1/capture/status",
     ),
+
+  // M13 — Debug endpoints (read-only)
+  getMemoryDebug: (id: string) =>
+    request<import("../types/api").DebugMemoryView>(
+      `/api/v1/debug/memories/${id}`,
+    ),
+
+  getObservationDebug: (id: string) =>
+    request<import("../types/api").DebugObservationView>(
+      `/api/v1/debug/observations/${id}`,
+    ),
+
+  getDebugTimeline: (params: {
+    namespace?: string | null;
+    limit?: number;
+  } = {}) => {
+    const q = new URLSearchParams();
+    if (params.namespace) q.set("namespace", params.namespace);
+    q.set("limit", String(params.limit ?? 50));
+    return request<import("../types/api").DebugTimelineEntry[]>(
+      `/api/v1/debug/timeline?${q.toString()}`,
+    );
+  },
 };

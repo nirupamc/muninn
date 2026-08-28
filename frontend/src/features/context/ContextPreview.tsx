@@ -9,6 +9,8 @@ import { fmtNum, shortId } from "../../lib/format";
 import { useScope } from "../../lib/scope";
 import type { ContextMemoryUsed, MemoryType } from "../../types/api";
 
+type RetrievalMode = "dense" | "lexical" | "hybrid";
+
 const TYPES: MemoryType[] = ["fact", "preference", "project", "goal", "decision", "event", "relationship", "procedure", "other"];
 const TRACE_FIELDS: { key: keyof ContextMemoryUsed; label: string; color: string }[] = [
   { key: "semantic_score", label: "Semantic", color: "var(--munin-cyan)" },
@@ -33,6 +35,7 @@ export function ContextPreview() {
   const [asOf, setAsOf] = useState("");
   const [includeSuperseded, setIncludeSuperseded] = useState(false);
   const [memoryTypes, setMemoryTypes] = useState<MemoryType[]>([]);
+  const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>("hybrid");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [inspectedId, setInspectedId] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export function ContextPreview() {
         memory_types: memoryTypes.length ? memoryTypes : null,
         include_superseded: includeSuperseded,
         as_of: asOf ? new Date(asOf).toISOString() : null,
+        retrieval_mode: retrievalMode,
       });
       selection.setResult(result);
     } catch (caught) {
@@ -79,6 +83,13 @@ export function ContextPreview() {
               <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Max Memories<input className="munin-input mt-1 w-full" type="number" min="1" max="20" required value={maxMemories} onChange={(event) => setMaxMemories(Number(event.target.value))} /></label>
               <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)] sm:col-span-2">As Of // blank is current<input className="munin-input mt-1 w-full" type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></label>
               <label className="flex items-center gap-2 self-end border border-[var(--munin-border)] px-2 py-2 font-mono text-[10px] text-[var(--munin-orange)]"><input type="checkbox" checked={includeSuperseded} onChange={(event) => setIncludeSuperseded(event.target.checked)} />INCLUDE SUPERSEDED</label>
+              <label className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Retrieval Mode
+                <select className="munin-input mt-1 block" value={retrievalMode} onChange={(event) => setRetrievalMode(event.target.value as RetrievalMode)}>
+                  <option value="hybrid">HYBRID (DENSE+BM25+RRF)</option>
+                  <option value="dense">DENSE ONLY</option>
+                  <option value="lexical">LEXICAL ONLY</option>
+                </select>
+              </label>
             </div>
             <fieldset className="lg:col-span-10"><legend className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">Memory Types // none selects all</legend><div className="mt-1 flex flex-wrap gap-2">{TYPES.map((type) => <label key={type} className="border border-[var(--munin-border)] px-2 py-1 font-mono text-[9px] uppercase text-[var(--munin-text)]"><input className="mr-1" type="checkbox" checked={memoryTypes.includes(type)} onChange={(event) => setMemoryTypes((current) => event.target.checked ? [...current, type] : current.filter((value) => value !== type))} />{type}</label>)}</div></fieldset>
             <div className="flex items-end justify-end lg:col-span-2"><button className="munin-btn context-submit w-full" type="submit" disabled={loading}>{loading ? "ASSEMBLING CONTEXT..." : "ASSEMBLE CONTEXT"}</button></div>
@@ -109,5 +120,5 @@ export function ContextPreview() {
 function Metric({ label, value }: { label: string; value: number }) { return <div className="bg-[var(--munin-panel-2)] p-3"><dt className="font-ui text-[12px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="font-digital-large text-[32px] text-[var(--munin-cyan)]">{value}</dd></div>; }
 
 function TraceCard({ memory, focused, onFocus }: { memory: ContextMemoryUsed; focused: boolean; onFocus: () => void }) {
-  return <article className={`border p-3 ${focused ? "border-[var(--munin-cyan)]" : "border-[var(--munin-border)]"}`}><button type="button" className="mb-2 font-mono text-[10px] text-[var(--munin-cyan)]" onClick={onFocus}>MEMORY // {shortId(memory.memory_id)}</button><dl className="space-y-1.5">{TRACE_FIELDS.map(({ key, label, color }) => { const value = memory[key] as number; return <div key={key} className="grid grid-cols-[100px_1fr_42px] items-center gap-2"><dt className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="h-1.5 bg-[var(--munin-border)]"><span className="block h-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }} /></dd><dd className="text-right font-mono text-[9px] text-[var(--munin-text)]">{fmtNum(value)}</dd></div>; })}</dl><div className="mt-2 font-mono text-[9px] text-[var(--munin-muted)]">TOKENS <span className="text-[var(--munin-text)]">{memory.estimated_tokens}</span></div><div className="mt-1 break-words font-mono text-[9px] text-[var(--munin-orange)]">RESULT INCLUDED{memory.reason_codes.length ? ` // ${memory.reason_codes.join(" // ")}` : ""}</div></article>;
+  return <article className={`border p-3 ${focused ? "border-[var(--munin-cyan)]" : "border-[var(--munin-border)]"}`}><button type="button" className="mb-2 font-mono text-[10px] text-[var(--munin-cyan)]" onClick={onFocus}>MEMORY // {shortId(memory.memory_id)}</button><dl className="space-y-1.5">{TRACE_FIELDS.map(({ key, label, color }) => { const value = memory[key] as number; return <div key={key} className="grid grid-cols-[100px_1fr_42px] items-center gap-2"><dt className="font-mono text-[9px] uppercase text-[var(--munin-muted)]">{label}</dt><dd className="h-1.5 bg-[var(--munin-border)]"><span className="block h-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }} /></dd><dd className="text-right font-mono text-[9px] text-[var(--munin-text)]">{fmtNum(value)}</dd></div>; })}</dl><div className="mt-2 font-mono text-[9px] text-[var(--munin-muted)]">TOKENS <span className="text-[var(--munin-text)]">{memory.estimated_tokens}</span></div>{memory.representation_level && <div className="mt-1 font-mono text-[9px]"><span className="text-[var(--munin-muted)]">REPRESENTATION </span><span className="text-[var(--munin-green)]">{memory.representation_level}</span>{memory.selection_reason && <span className="text-[var(--munin-orange)]"> // {memory.selection_reason}</span>}</div>}<div className="mt-1 break-words font-mono text-[9px] text-[var(--munin-orange)]">RESULT INCLUDED{memory.reason_codes.length ? ` // ${memory.reason_codes.join(" // ")}` : ""}</div></article>;
 }

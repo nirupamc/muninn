@@ -134,6 +134,37 @@ class SessionNormalizer:
         r"build failed\b",
     ]
 
+    # M12: Map AgentSessionEventType → CaptureEventType for new types
+    _EVENT_TYPE_MAP: dict[AgentSessionEventType, CaptureEventType] = {
+        AgentSessionEventType.tool_call: CaptureEventType.agent_tool_result,
+        AgentSessionEventType.tool_result: CaptureEventType.agent_tool_result,
+        AgentSessionEventType.decision: CaptureEventType.decision_event,
+        AgentSessionEventType.bug: CaptureEventType.error_event,
+        AgentSessionEventType.fix: CaptureEventType.agent_decision,
+        AgentSessionEventType.milestone: CaptureEventType.agent_summary,
+        AgentSessionEventType.blocker: CaptureEventType.blocker_event,
+        AgentSessionEventType.constraint: CaptureEventType.manual_note,
+    }
+
+    # M12: Map observation type string → CaptureEventType
+    _OBS_TYPE_MAP: dict[str, CaptureEventType] = {
+        "command_run": CaptureEventType.command_run,
+        "command_result": CaptureEventType.command_result,
+        "test_run": CaptureEventType.test_run,
+        "test_result": CaptureEventType.test_result,
+        "file_edit": CaptureEventType.file_edit,
+        "file_create": CaptureEventType.file_create,
+        "file_delete": CaptureEventType.file_delete,
+        "error": CaptureEventType.error_event,
+        "warning": CaptureEventType.warning_event,
+        "blocker": CaptureEventType.blocker_event,
+        "decision": CaptureEventType.decision_event,
+        "verification": CaptureEventType.verification,
+        "build_result": CaptureEventType.build_result,
+        "api_result": CaptureEventType.api_result,
+        "git_commit": CaptureEventType.git_commit,
+    }
+
     def __init__(self) -> None:
         self._decision_re = re.compile("|".join(self.DECISION_PATTERNS), re.IGNORECASE)
         self._fix_re = re.compile("|".join(self.FIX_PATTERNS), re.IGNORECASE)
@@ -145,6 +176,8 @@ class SessionNormalizer:
         self._secret_re = re.compile("|".join(self.SECRET_PATTERNS), re.IGNORECASE)
         self._tool_success_re = re.compile("|".join(self.TOOL_SUCCESS_PATTERNS), re.IGNORECASE)
         self._tool_failure_re = re.compile("|".join(self.TOOL_FAILURE_PATTERNS), re.IGNORECASE)
+        # M12: Structured observation normalizer (lazy init to avoid circular import)
+        self._obs_normalizer = None
 
     def contains_secret(self, content: str | list | dict | None) -> bool:
         """Check if content contains secrets or credentials.
@@ -361,21 +394,29 @@ class SessionNormalizer:
         
         content = "\n".join(content_parts)
         
-        # Map to capture event type
-        if classified_type == AgentSessionEventType.decision:
-            capture_type = CaptureEventType.agent_decision
-        elif classified_type == AgentSessionEventType.fix:
-            capture_type = CaptureEventType.agent_decision  # Fixes are decisions
-        elif classified_type == AgentSessionEventType.bug:
-            capture_type = CaptureEventType.manual_note  # Bug reports
-        elif classified_type == AgentSessionEventType.milestone:
-            capture_type = CaptureEventType.agent_summary
-        elif classified_type == AgentSessionEventType.blocker:
-            capture_type = CaptureEventType.manual_note
-        elif classified_type == AgentSessionEventType.constraint:
-            capture_type = CaptureEventType.manual_note
-        elif classified_type == AgentSessionEventType.tool_result:
-            capture_type = CaptureEventType.agent_tool_result
+        # M12: Use structured observation normalizer for richer extraction
+        observation = None
+        try:
+            from app.observations.normalizer import ObservationNormalizer as _ObsNorm
+            if self._obs_normalizer is None:
+                self._obs_normalizer = _ObsNorm()
+            observation = self._obs_normalizer.normalize_event(
+                normalized_event,
+                agent_host=session.source.value if isinstance(session.source, AgentSessionSource) else str(session.source),
+                model=session.metadata.get("model") if isinstance(session.metadata.get("model"), str) else (
+                    session.metadata.get("model", {}).get("id") if isinstance(session.metadata.get("model"), dict) else None
+                ),
+                project_id=session.project_id,
+                namespace=session.namespace,
+            )
+        except Exception:
+            observation = None
+
+        # Map to capture event type (prefer observation-based mapping)
+        if observation and observation.type.value in self._OBS_TYPE_MAP:
+            capture_type = self._OBS_TYPE_MAP[observation.type.value]
+        elif classified_type in self._EVENT_TYPE_MAP:
+            capture_type = self._EVENT_TYPE_MAP[classified_type]
         elif classified_type == AgentSessionEventType.user_message:
             # Only capture meaningful user messages
             if not self.is_trivial(event.content):
@@ -383,26 +424,40 @@ class SessionNormalizer:
             else:
                 return None
         else:
-            capture_type = CaptureEventType.agent_summary
-        
-        # Build fingerprint
+            capture_type = CaptureEventType.agent_summary        # Build fingerprint
         import hashlib
         fingerprint = hashlib.sha256(
             f"{session.id}|{event.session_id}|{classified_type.value}|{content}".encode()
         ).hexdigest()[:64]
-        
+
+        # M12: Enrich metadata with observation data
+        metadata = {
+            "agent_session_id": event.session_id,
+            "agent_session_source": session.source.value,
+            "agent_session_event_type": classified_type.value,
+            "role": event.role,
+            "external_event_id": event.external_event_id,
+            "tool_summary": tool_summary,
+            **event.metadata,
+        }
+
+        # Add observation-specific metadata if available
+        if observation:
+            metadata["observation_type"] = observation.type.value
+            metadata["observation_id"] = observation.id
+            if observation.structured_data:
+                metadata["structured_data"] = observation.structured_data
+            if observation.actor:
+                metadata["actor"] = observation.actor
+            if observation.model:
+                metadata["model"] = observation.model
+            if observation.agent_host:
+                metadata["agent_host"] = observation.agent_host
+
         return {
             "event_type": capture_type,
             "content": content,
-            "metadata": {
-                "agent_session_id": event.session_id,
-                "agent_session_source": session.source.value,
-                "agent_session_event_type": classified_type.value,
-                "role": event.role,
-                "external_event_id": event.external_event_id,
-                "tool_summary": tool_summary,
-                **event.metadata,
-            },
+            "metadata": metadata,
             "occurred_at": event.occurred_at,
             "fingerprint": fingerprint,
             "agent_id": session.metadata.get("agent") or session.source.value,

@@ -11,6 +11,8 @@ export function toMemoryNode(m: MemoryRead): MemoryNode {
     id: m.id,
     label: shortLabel(m.content),
     content: m.content,
+    gist: m.gist ?? null,
+    summary: m.summary ?? null,
     memoryType: m.memory_type,
     status: m.status,
     importance: m.importance,

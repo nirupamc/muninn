@@ -29,9 +29,7 @@ def cmd_embed_memories(_args: object | None = None) -> int:
         summary = service.backfill_missing()
         logger.info(
             "Backfill complete scanned_missing=%s embedded=%s failed=%s",
-            summary["scanned_missing"],
-            summary["embedded"],
-            summary["failed"],
+            summary["scanned_missing"], summary["embedded"], summary["failed"],
         )
         print(
             "Backfill complete: "
@@ -40,6 +38,41 @@ def cmd_embed_memories(_args: object | None = None) -> int:
             f"failed={summary['failed']}"
         )
         return 1 if summary["failed"] else 0
+    finally:
+        db.close()
+
+
+def cmd_memory_representations(args) -> int:
+    """Manage hierarchical memory representations (M10)."""
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    logger = logging.getLogger("munin.cli")
+
+    db = SessionLocal()
+    try:
+        from app.memory.representations.service import RepresentationService
+        service = RepresentationService(db)
+
+        if args.repr_command == "backfill":
+            dry_run = getattr(args, "dry_run", False)
+            batch_size = getattr(args, "batch_size", 100)
+            skip_existing = not getattr(args, "force", False)
+
+            print(f"Backfilling representations (dry_run={dry_run}, batch_size={batch_size})...")
+            stats = service.backfill(
+                batch_size=batch_size,
+                dry_run=dry_run,
+                skip_existing=skip_existing,
+            )
+            print(f"\nBackfill complete:")
+            print(f"  scanned: {stats['scanned']}")
+            print(f"  updated: {stats['updated']}")
+            print(f"  skipped: {stats['skipped']}")
+            print(f"  failed:  {stats['failed']}")
+            return 1 if stats["failed"] else 0
+        else:
+            print(f"Unknown representations command: {args.repr_command}")
+            return 1
     finally:
         db.close()
 
@@ -633,6 +666,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show installed coding agent status",
     )
 
+    # M10 — Memory representations
+    repr_p = sub.add_parser(
+        "memory-representations",
+        help="Manage hierarchical memory representations (M10)",
+    )
+    repr_sub = repr_p.add_subparsers(dest="repr_command", required=True)
+
+    backfill_p = repr_sub.add_parser(
+        "backfill",
+        help="Backfill L0/L1 representations for existing memories",
+    )
+    backfill_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without writing",
+    )
+    backfill_p.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Number of memories per batch",
+    )
+    backfill_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate even if representations already exist",
+    )
+
     return parser
 
 
@@ -647,6 +708,9 @@ def main(argv: list[str] | None = None) -> None:
         "remember": cmd_remember,
         "run": cmd_run,
         "agents": cmd_agents,
+        "memory-representations": {
+            "backfill": cmd_memory_representations,
+        },
         "project": {
             "add": cmd_project_add,
             "list": cmd_project_list,
@@ -665,7 +729,7 @@ def main(argv: list[str] | None = None) -> None:
         },
     }
 
-    if args.command in ("project", "capture"):
+    if args.command in ("project", "capture", "memory-representations"):
         handler_map = handlers[args.command]
         subcommand = getattr(args, f"{args.command}_command")
         handler = handler_map.get(subcommand)

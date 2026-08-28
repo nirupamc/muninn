@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -110,16 +109,23 @@ class CaptureManager:
             logger.info("Detached capture adapters for project %s", project_id)
 
     async def _capture_loop(self) -> None:
-        """Main capture loop."""
+        """Main capture loop.
+
+        Blocking capture work runs in a thread via ``asyncio.to_thread``
+        so the event-loop is never starved and Uvicorn can keep serving
+        HTTP requests concurrently.
+        """
+        # Yield once so Uvicorn can finish binding the port.
+        await asyncio.sleep(0)
         while self._running:
             try:
-                await self._process_all_projects()
+                await asyncio.to_thread(self._process_all_projects_sync)
             except Exception as e:
                 logger.error("Error in capture loop: %s", e)
-            await asyncio.sleep(30)  # Check every 30 seconds
+            await asyncio.sleep(30)
 
-    async def _process_all_projects(self) -> None:
-        """Process all projects with capture enabled."""
+    def _process_all_projects_sync(self) -> None:
+        """Process all projects (synchronous, runs in a thread)."""
         db = self.db_factory()
         try:
             resolver = ProjectResolver(db)
@@ -128,7 +134,7 @@ class CaptureManager:
             projects = resolver.get_active_projects()
             for project in projects:
                 try:
-                    await self._process_project(project, service, db)
+                    self._process_project_sync(project, service, db)
                     db.commit()  # Commit after each project to persist checkpoints
                 except Exception as e:
                     db.rollback()
@@ -136,22 +142,20 @@ class CaptureManager:
         finally:
             db.close()
 
-    async def _process_project(self, project: Project, service: CaptureService, db: Session) -> None:
-        """Process a single project's adapters."""
+    def _process_project_sync(self, project: Project, service: CaptureService, db: Session) -> None:
+        """Process a single project's adapters (synchronous)."""
         adapters = self._adapters.get(project.id, [])
         for adapter in adapters:
             if not getattr(adapter, "supports_polling", True):
-                # Push-based adapters (e.g. GenericCaptureBridge) must not be
-                # polled; events arrive via API/CLI submissions instead.
                 continue
             try:
                 events = adapter.discover_events(project, db)
                 for event_data in events:
-                    await self._process_event(project, service, db, adapter, event_data)
+                    self._process_event_sync(project, service, db, adapter, event_data)
             except Exception as e:
                 logger.error("Error with adapter %s for project %s: %s", adapter.name, project.id, e)
 
-    async def _process_event(
+    def _process_event_sync(
         self,
         project: Project,
         service: CaptureService,
@@ -159,8 +163,8 @@ class CaptureManager:
         adapter: CaptureAdapter,
         event_data: dict[str, Any],
     ) -> None:
-        """Process a single capture event."""
-        from app.models.capture import CaptureEventType, CaptureSource
+        """Process a single capture event (synchronous)."""
+        from app.models.capture import CaptureEventType
 
         event_type = event_data.get("event_type")
         if isinstance(event_type, str):
@@ -192,6 +196,7 @@ class CaptureManager:
 
     async def _health_check_loop(self) -> None:
         """Periodic health check and adapter refresh."""
+        await asyncio.sleep(0)
         while self._running:
             await asyncio.sleep(300)  # Every 5 minutes
             try:
@@ -218,17 +223,3 @@ def set_capture_manager(manager: CaptureManager) -> None:
     """Set the global capture manager instance."""
     global _capture_manager
     _capture_manager = manager
-
-
-@asynccontextmanager
-async def capture_lifespan(db_factory: callable):
-    """FastAPI lifespan for capture manager."""
-    global _capture_manager
-    manager = CaptureManager(db_factory)
-    set_capture_manager(manager)
-    await manager.start()
-    try:
-        yield
-    finally:
-        await manager.stop()
-        set_capture_manager(None)

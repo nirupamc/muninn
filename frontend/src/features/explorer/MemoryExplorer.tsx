@@ -129,10 +129,13 @@ export function MemoryExplorer() {
         {total === 0 ? <EmptyState title="NO DURABLE MEMORIES FOUND" /> : rows.length === 0 ? <EmptyState title="NO MEMORIES MATCH CURRENT FILTERS" /> : (
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="munin-table table-fixed" aria-label="Memory records">
-              <thead><tr><th className="w-[100px]">Type</th><th className="w-[110px]">Status</th><th>Content</th><th className="hidden w-[150px] lg:table-cell">Namespace</th><th className="hidden w-[110px] md:table-cell">Agent</th><th className="hidden w-[80px] sm:table-cell">Importance</th><th className="w-[80px]">Confidence</th><th className="hidden w-[150px] xl:table-cell">Updated</th></tr></thead>
+              <thead><tr><th className="w-[100px]">Type</th><th className="w-[110px]">Status</th><th className="w-[60px] hidden md:table-cell">L0</th><th>Content</th><th className="hidden w-[150px] lg:table-cell">Namespace</th><th className="hidden w-[110px] md:table-cell">Agent</th><th className="hidden w-[80px] sm:table-cell">Importance</th><th className="w-[80px]">Confidence</th><th className="hidden w-[150px] xl:table-cell">Updated</th></tr></thead>
               <tbody>{rows.map((memory) => (
                 <tr key={memory.id} className="munin-row focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--munin-cyan)]" tabIndex={0} aria-label={`Inspect memory ${memory.id}`} onClick={() => setSelectedId(memory.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(memory.id); } }}>
                   <td><TypeTag type={memory.memoryType} /></td><td><StatusTag status={memory.status} /></td>
+                  <td className="hidden md:table-cell">
+                    {memory.gist ? <span className="rounded bg-[rgba(39,227,107,0.1)] px-1 py-0.5 font-mono text-[8px] text-[var(--munin-green)]" title={memory.gist ?? ""}>L0</span> : <span className="text-[var(--munin-muted)]">—</span>}
+                  </td>
                   <td><div className="truncate text-[var(--munin-text)]" title={memory.content}>{memory.content}</div><div className="mt-1 truncate text-[9px] text-[var(--munin-muted)] md:hidden">{memory.agentId ?? "unknown"} // {memory.namespace}</div></td>
                   <td className="hidden truncate text-[var(--munin-cyan)] lg:table-cell">{memory.namespace}</td><td className="hidden truncate md:table-cell">{memory.agentId ?? "unknown"}</td>
                   <td className="hidden sm:table-cell">{fmtNum(memory.importance)}</td><td>{fmtNum(memory.confidence)}</td><td className="hidden xl:table-cell">{fmtDateTime(memory.updatedAt)}</td>

@@ -63,7 +63,42 @@ export function Timeline() {
     {data.data && <div className="flex flex-wrap gap-x-4 border-b border-[var(--munin-border)] px-3 py-1 font-mono text-[9px] text-[var(--munin-muted)]"><span>CHAINS <b className="text-[var(--munin-cyan)]">{chains.length}</b></span><span>TRANSITIONS <b className="text-[var(--munin-cyan)]">{chains.reduce((count, chain) => count + chain.records.length, 0)}</b></span><span>MEMORIES <b className="text-[var(--munin-green)]">{data.data.memories.length}</b></span>{!data.data.completeDataset && <span className="text-[var(--munin-orange)]">DATASET CAPPED AT 10,000</span>}{data.data.historyFailures > 0 && <span className="text-[var(--munin-orange)]">TEMPORAL INDEX DEGRADED // {data.data.historyFailures} FAILED</span>}</div>}
 
     <main className="min-h-0 flex-1 overflow-y-auto p-3">
-      {data.data && data.data.records.length === 0 && <EmptyState title="NO TEMPORAL TRANSITIONS FOUND" detail={<>Current scope has {data.data.memories.length} memories but no recorded SUPERSEDES / UPDATES / CONTRADICTS relationships.</>} />}
+      {/* M10 — Temporal Summary Cards */}
+      {data.data && data.data.records.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="border border-[var(--munin-border)] bg-[var(--munin-panel)] p-3">
+            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">Active Memories</div>
+            <div className="font-digital-large text-[24px] text-[var(--munin-green)]">
+              {data.data.memories.filter((m) => m.status === "active").length}
+            </div>
+          </div>
+          <div className="border border-[var(--munin-border)] bg-[var(--munin-panel)] p-3">
+            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">Superseded</div>
+            <div className="font-digital-large text-[24px] text-[var(--munin-orange)]">
+              {data.data.memories.filter((m) => m.status === "superseded").length}
+            </div>
+          </div>
+          <div className="border border-[var(--munin-border)] bg-[var(--munin-panel)] p-3">
+            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">Contradictions</div>
+            <div className="font-digital-large text-[24px] text-[var(--munin-red)]">
+              {data.data.records.filter((r) => r.relationship.toUpperCase() === "CONTRADICTS").length}
+            </div>
+          </div>
+          <div className="border border-[var(--munin-border)] bg-[var(--munin-panel)] p-3">
+            <div className="font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">Chains</div>
+            <div className="font-digital-large text-[24px] text-[var(--munin-cyan)]">
+              {chains.length}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {data.data && data.data.records.length === 0 && (
+        <EmptyState
+          title="NO TEMPORAL TRANSITIONS FOUND"
+          detail={<>Current scope has {data.data.memories.length} memories but no recorded SUPERSEDES / UPDATES / CONTRADICTS relationships. Temporal relationships are created when new memories contradict, update, or supersede existing ones.</>}
+        />
+      )}
       {data.data && data.data.records.length > 0 && chains.length === 0 && <EmptyState title="NO TRANSITIONS MATCH CURRENT FILTERS" />}
       <div className="mx-auto max-w-5xl space-y-4">{chains.map((chain, index) => <section key={chain.id} className="munin-panel" aria-labelledby={`chain-${chain.id}`}><header className="border-b border-[var(--munin-border)] px-3 py-2"><h2 id={`chain-${chain.id}`} className="font-display text-[11px] tracking-wide-ext text-[var(--munin-cyan)]">Chain {String(index + 1).padStart(2, "0")} // {chain.memoryIds.length} Memories</h2></header><ol className="p-3">{chain.records.map((record) => <Transition key={record.id} record={record} source={memoryById.get(record.matched_memory_id ?? "")} target={memoryById.get(record.created_memory_id ?? "")} focusedId={focusedId} onOpen={setSelectedId} />)}</ol></section>)}</div>
     </main>

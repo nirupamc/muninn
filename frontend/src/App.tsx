@@ -7,6 +7,7 @@ import { MemoryExplorer } from "./features/explorer/MemoryExplorer";
 import { Projects } from "./features/scope/Projects";
 import { Agents } from "./features/scope/Agents";
 import { StatusPage } from "./features/system/StatusPage";
+import { Observations } from "./features/observations/Observations";
 import { ContextSelectionProvider } from "./lib/contextSelection";
 import { LoadingState } from "./components/ui/States";
 import { RouteErrorBoundary } from "./components/errors/RouteErrorBoundary";
@@ -21,14 +22,15 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/overview" replace />} />
       <Route path="/overview" element={<Overview />} />
-      <Route path="/graph" element={<RouteErrorBoundary routeLabel="memory graph"><MemoryGraph /></RouteErrorBoundary>} />
       <Route path="/memories" element={<MemoryExplorer />} />
-      <Route path="/projects" element={<Projects />} />
-      <Route path="/agents" element={<Agents />} />
-      <Route path="/status" element={<StatusPage />} />
-      <Route path="/context" element={<RouteErrorBoundary routeLabel="context assembly"><ContextPreview /></RouteErrorBoundary>} />
+      <Route path="/graph" element={<RouteErrorBoundary routeLabel="memory graph"><MemoryGraph /></RouteErrorBoundary>} />
+      <Route path="/context" element={<RouteErrorBoundary routeLabel="context retrieval"><ContextPreview /></RouteErrorBoundary>} />
+      <Route path="/observations" element={<Observations />} />
       <Route path="/timeline" element={<RouteErrorBoundary routeLabel="temporal trace"><Timeline /></RouteErrorBoundary>} />
       <Route path="/conflicts" element={<RouteErrorBoundary routeLabel="conflict center"><ConflictCenter /></RouteErrorBoundary>} />
+      <Route path="/agents" element={<Agents />} />
+      <Route path="/projects" element={<Projects />} />
+      <Route path="/status" element={<StatusPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
   );

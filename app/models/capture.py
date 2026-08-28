@@ -35,6 +35,7 @@ class CaptureSource(str, enum.Enum):
 class CaptureEventType(str, enum.Enum):
     """Type of capture event."""
 
+    # Legacy types (pre-M12)
     project_discovered = "project_discovered"
     git_commit = "git_commit"
     git_branch_change = "git_branch_change"
@@ -45,6 +46,22 @@ class CaptureEventType(str, enum.Enum):
     agent_decision = "agent_decision"
     agent_tool_result = "agent_tool_result"
     manual_note = "manual_note"
+
+    # M12 — Structured observation types
+    command_run = "command_run"
+    command_result = "command_result"
+    test_run = "test_run"
+    test_result = "test_result"
+    file_edit = "file_edit"
+    file_create = "file_create"
+    file_delete = "file_delete"
+    error_event = "error_event"
+    warning_event = "warning_event"
+    verification = "verification"
+    blocker_event = "blocker_event"
+    decision_event = "decision_event"
+    build_result = "build_result"
+    api_result = "api_result"
 
 
 class CaptureProcessingStatus(str, enum.Enum):

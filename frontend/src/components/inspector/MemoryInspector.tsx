@@ -6,6 +6,7 @@ import { fmtDateTime, fmtNum, shortId } from "../../lib/format";
 import type { ConsolidationRead } from "../../types/api";
 import type { MemoryNode } from "../../types/domain";
 import { StatusTag, TypeTag } from "../ui/Tags";
+import { MemoryDebugPanel } from "./MemoryDebugPanel";
 
 interface MemoryInspectorProps {
   memoryId?: string | null;
@@ -30,6 +31,7 @@ export function MemoryInspector({ memoryId, node, onClose }: MemoryInspectorProp
   const requestedId = memoryId ?? node?.id ?? null;
   const [activeId, setActiveId] = useState<string | null>(requestedId);
   const [backStack, setBackStack] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => { setActiveId(requestedId); setBackStack([]); }, [requestedId]);
 
@@ -71,9 +73,17 @@ export function MemoryInspector({ memoryId, node, onClose }: MemoryInspectorProp
           {backStack.length > 0 && <button type="button" className="munin-btn" onClick={goBack} aria-label="Back to previous memory">← BACK</button>}
           <div className="truncate font-mono text-[11px] text-[var(--munin-green)]" title={activeId}>MEMORY // {shortId(activeId)}</div>
         </div>
-        <button type="button" className="munin-btn" onClick={onClose} aria-label="Close memory inspector">CLOSE</button>
+        <div className="flex gap-1">
+          <button type="button" className="munin-btn" onClick={() => setShowDebug(!showDebug)} title="Open memory debugger">
+            {showDebug ? "INSPECT" : "DEBUG"}
+          </button>
+          <button type="button" className="munin-btn" onClick={onClose} aria-label="Close memory inspector">CLOSE</button>
+        </div>
       </header>
 
+      {showDebug && activeId ? (
+        <MemoryDebugPanel memoryId={activeId} onClose={() => setShowDebug(false)} />
+      ) : (
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {detail.loading && !memory && <div className="py-8 text-center font-mono text-[11px] text-[var(--munin-cyan)]">LOADING MEMORY...</div>}
         {detail.error && !memory && <SectionError label="MEMORY DETAIL" />}
@@ -83,6 +93,19 @@ export function MemoryInspector({ memoryId, node, onClose }: MemoryInspectorProp
               <h2 id="inspector-core" className="mb-2 font-display text-[12px] tracking-wide-ext text-[var(--munin-green)]">Core Memory</h2>
               <div className="mb-2 flex flex-wrap gap-2"><TypeTag type={memory.memoryType} /><StatusTag status={memory.status} />{memory.isConsolidated && <span className="status-tag text-[var(--munin-purple)]">CONSOLIDATED</span>}</div>
               <div className="munin-panel-2 mb-3 whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-[var(--munin-text)]">{memory.content}</div>
+              {/* M10 — Hierarchical Representations */}
+              <div className="mb-3 border border-[var(--munin-border)] p-2">
+                <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-[var(--munin-muted)]">Representations</div>
+                <div className="flex gap-2 mb-1">
+                  <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] ${memory.gist ? "bg-[rgba(39,227,107,0.1)] text-[var(--munin-green)]" : "text-[var(--munin-muted)]"}`}>L0 GIST</span>
+                  <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] ${memory.summary ? "bg-[rgba(34,211,238,0.1)] text-[var(--munin-cyan)]" : "text-[var(--munin-muted)]"}`}>L1 SUMMARY</span>
+                  <span className="rounded bg-[rgba(255,152,48,0.1)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--munin-orange)]">L2 FULL</span>
+                </div>
+                {memory.gist && <div className="mb-1 font-mono text-[10px] text-[var(--munin-green)]">L0: {memory.gist}</div>}
+                {!memory.gist && <div className="mb-1 font-mono text-[10px] text-[var(--munin-muted)]">L0: NOT RECORDED</div>}
+                {memory.summary && <div className="font-mono text-[10px] text-[var(--munin-cyan)]">L1: {memory.summary}</div>}
+                {!memory.summary && <div className="font-mono text-[10px] text-[var(--munin-muted)]">L1: NOT RECORDED</div>}
+              </div>
               <dl>
                 <Field label="Memory ID">{memory.id}</Field><Field label="Namespace" color="var(--munin-cyan)">{memory.namespace}</Field>
                 <Field label="User ID">{memory.userId ?? "Unavailable"}</Field><Field label="Agent ID">{memory.agentId ?? "Unavailable"}</Field>
@@ -136,6 +159,7 @@ export function MemoryInspector({ memoryId, node, onClose }: MemoryInspectorProp
           </>
         )}
       </div>
+      )}
     </aside>
   );
 }

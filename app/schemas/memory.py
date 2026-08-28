@@ -91,6 +91,8 @@ class MemoryRead(BaseModel):
     user_id: str | None
     agent_id: str | None
     content: str
+    gist: str | None = None
+    summary: str | None = None
     memory_type: MemoryType
     importance: float
     confidence: float

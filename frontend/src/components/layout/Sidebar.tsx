@@ -5,23 +5,24 @@ import { api } from "../../api/client";
 
 const PRIMARY = [
   ["01", "/overview", "OVERVIEW", "CORE STATUS"],
-  ["02", "/graph", "MEMORY", "NETWORK"],
-  ["03", "/memories", "MEMORY", "INDEX"],
-  ["04", "/context", "CONTEXT", "ASSEMBLY"],
-  ["05", "/timeline", "TEMPORAL", "TRACE"],
-  ["06", "/conflicts", "CONFLICT", "CENTER"],
+  ["02", "/memories", "MEMORY", "EXPLORER"],
+  ["03", "/graph", "MEMORY", "GRAPH"],
+  ["04", "/context", "CONTEXT", "RETRIEVAL"],
+  ["05", "/observations", "OBSERVATIONS", "ACTIVITY"],
+  ["06", "/timeline", "TEMPORAL", "TRACE"],
+  ["07", "/conflicts", "CONFLICT", "CENTER"],
+  ["08", "/agents", "AGENTS", "SYSTEM"],
 ] as const;
 
 const SECONDARY = [
   ["/projects", "PROJECTS"],
-  ["/agents", "AGENTS"],
   ["/status", "STATUS"],
 ] as const;
 
 export function Sidebar() {
   const { namespace, setNamespace } = useScope();
   const [open, setOpen] = useState(false);
-  const [projects, setProjects] = useState<Array<{ id: string; name: string; namespace: string; status: string }>>([]);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; namespace: string; status: string; memory_count: number }>>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
 
   useEffect(() => {
@@ -51,12 +52,15 @@ export function Sidebar() {
       </button>
       {open && <button className="mobile-nav-scrim" type="button" aria-label="Close navigation" onClick={() => setOpen(false)} />}
       <nav className={`operations-sidebar ${open ? "mobile-open" : ""}`} aria-label="Operational sectors">
+        {/* Fixed: brand header */}
         <div className="sidebar-identity">
           <button type="button" onClick={() => setOpen(false)} className="sidebar-close" aria-label="Close navigation">×</button>
           <span>MEMORY OPERATIONS</span>
           <strong>MUNIN</strong>
           <small>NERV-01 // ACTIVE</small>
         </div>
+
+        {/* Fixed: main navigation — never scrolls */}
         <div className="sector-list">
           {PRIMARY.map(([number, to, line1, line2]) => (
             <NavLink
@@ -72,46 +76,45 @@ export function Sidebar() {
           ))}
         </div>
 
+        {/* Scrollable: project scope list — independently scrollable */}
         <div className="scope-control">
           <label htmlFor="active-scope">CURRENT OPERATING SCOPE</label>
-          <div className="relative">
-            <input
-              id="active-scope"
-              className="munin-input"
-              value={namespace}
-              spellCheck={false}
-              onChange={(event) => setNamespace(event.target.value.trim() || "project:munin")}
-            />
-            {projects.length > 0 && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--munin-bg-elevated)] border border-[var(--munin-border)] rounded-md overflow-hidden z-10 max-h-60 overflow-auto">
-                {projects.map((p) => (
-                  <button
-                    key={p.id}
-                    className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-[var(--munin-border)] ${namespace === p.namespace ? "bg-[var(--munin-border)]" : ""}`}
-                    onClick={() => handleProjectSelect(p.namespace)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{
-                          backgroundColor:
-                            p.status === "ACTIVE" ? "var(--munin-green)" :
-                            p.status === "CONNECTED" ? "var(--munin-cyan)" :
-                            p.status === "MEMORIZED" ? "var(--munin-amber)" :
-                            p.status === "DISABLED" ? "var(--munin-red)" :
-                            "var(--munin-muted)"
-                        }}
-                      />
-                      <span className="truncate">{p.name}</span>
-                      <span className="text-[var(--munin-muted)] ml-auto">{p.namespace}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <input
+            id="active-scope"
+            className="munin-input"
+            value={namespace}
+            spellCheck={false}
+            onChange={(event) => setNamespace(event.target.value.trim() || "project:munin")}
+          />
+          {projects.length > 0 && (
+            <div className="project-list">
+              {projects.map((p) => (
+                <button
+                  key={p.id}
+                  className={`project-item ${namespace === p.namespace ? "active" : ""}`}
+                  onClick={() => handleProjectSelect(p.namespace)}
+                  title={`${p.name} — ${p.namespace} — ${p.memory_count} memories`}
+                >
+                  <span
+                    className="project-dot"
+                    style={{
+                      backgroundColor:
+                        p.status === "ACTIVE" ? "var(--munin-green)" :
+                        p.status === "CONNECTED" ? "var(--munin-cyan)" :
+                        p.status === "MEMORIZED" ? "var(--munin-amber)" :
+                        p.status === "DISABLED" ? "var(--munin-red)" :
+                        "var(--munin-muted)"
+                    }}
+                  />
+                  <span className="project-name">{p.name}</span>
+                  <span className="project-count">{p.memory_count}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* Fixed: secondary nav */}
         <div className="secondary-nav">
           {SECONDARY.map(([to, label]) => (
             <NavLink
@@ -125,6 +128,7 @@ export function Sidebar() {
           ))}
         </div>
 
+        {/* Fixed: lifecycle rail */}
         <div className="lifecycle-rail">
           <span>MEMORY LIFECYCLE</span>
           <i className="active" />

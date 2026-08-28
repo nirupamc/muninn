@@ -12,6 +12,7 @@ from app.context.assembler import ContextAssembler
 from app.context.models import ContextConfig
 from app.embeddings.base import EmbeddingProvider
 from app.embeddings.factory import get_embedding_provider
+from app.retrieval.models import RetrievalMode
 from app.schemas.context import ContextRequest, ContextResponse, MemoryUsed
 
 logger = logging.getLogger("munin.context")
@@ -73,6 +74,14 @@ class ContextService:
             provider=self.provider,
         )
 
+        # M11: Set retrieval mode if specified in request
+        if req.retrieval_mode:
+            try:
+                mode = RetrievalMode(req.retrieval_mode)
+                assembler.set_retrieval_mode(mode)
+            except ValueError:
+                pass  # Invalid mode, fall back to default (dense)
+
         selected, context_text, final_tokens, truncated, _trace = assembler.assemble(
             query=req.query,
             namespace=req.namespace,
@@ -100,6 +109,8 @@ class ContextService:
                 final_score=m.final_score,
                 estimated_tokens=m.estimated_tokens,
                 reason_codes=m.reason_codes,
+                representation_level=m.representation_level.value if m.representation_level else None,
+                selection_reason=m.selection_reason,
             )
             for m in selected
         ]

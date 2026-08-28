@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Gauge, TerminalDisplay } from "@mdrbx/nerv-ui";
 import { api, ApiError } from "../../api/client";
-import type { ProjectRead } from "../../types/api";
+import type { CaptureEventRead, DebugTimelineEntry, ProjectRead } from "../../types/api";
 import { useHealth } from "../../hooks/useHealth";
 import { useScope } from "../../lib/scope";
 import { Panel } from "../../components/ui/Panel";
 import { StatBlock } from "../../components/ui/StatBlock";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui/States";
 import { StatusTag, TypeTag } from "../../components/ui/Tags";
-import { fmtDateTime } from "../../lib/format";
+import { fmtDateTime, shortId } from "../../lib/format";
 import type { MemoryStatus } from "../../types/api";
 import { useOverviewData, type ActivityKind } from "./useOverviewData";
 
@@ -24,6 +24,11 @@ const ACTIVITY_COLOR: Record<ActivityKind, string> = {
   SUPERSEDES: "var(--munin-orange)",
   UPDATES: "var(--munin-amber)",
   CONTRADICTS: "var(--munin-red)",
+};
+
+const OUTCOME_COLOR: Record<string, string> = {
+  STORE: "var(--munin-green)",
+  IGNORE: "var(--munin-orange)",
 };
 
 function timeOnly(iso: string): string {
@@ -70,11 +75,28 @@ function useProjectRegistry() {
   return { projects, error, reload: load };
 }
 
+function useRecentActivity(namespace: string) {
+  const [entries, setEntries] = useState<DebugTimelineEntry[]>([]);
+  const [captures, setCaptures] = useState<CaptureEventRead[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      api.getDebugTimeline({ namespace, limit: 15 }).catch(() => [] as DebugTimelineEntry[]),
+      api.listCaptureEvents({ limit: 10 }).catch(() => [] as CaptureEventRead[]),
+    ]).then(([tl, ce]) => {
+      if (!cancelled) { setEntries(tl); setCaptures(ce); }
+    });
+    return () => { cancelled = true; };
+  }, [namespace]);
+  return { entries, captures };
+}
+
 export function Overview() {
   const { namespace, setNamespace } = useScope();
   const overview = useOverviewData(namespace);
   const health = useHealth();
   const registry = useProjectRegistry();
+  const activity = useRecentActivity(namespace);
 
   const stats = useMemo(() => {
     const all = overview.data?.memories ?? [];
@@ -261,6 +283,72 @@ export function Overview() {
             )}
           </Panel>
         </div>
+
+        {/* M12 — Recent Observations */}
+        <Panel
+          title="Recent Observations"
+          subtitle="M12 structured activity feed"
+          right={<span className="font-mono text-[9px] text-[var(--munin-muted)]">LATEST {Math.min(activity.entries.length, 10)}</span>}
+          className="min-h-[260px] xl:col-span-6"
+          bodyClassName="overflow-hidden"
+        >
+          {activity.entries.length === 0 ? (
+            <EmptyState title="NO OBSERVATIONS" detail="Observations appear when agent sessions produce structured events." />
+          ) : (
+            <ol className="divide-y divide-[var(--munin-border)]">
+              {activity.entries.slice(0, 10).map((entry, i) => {
+                const detail = entry.details as Record<string, unknown>;
+                const admission = String(detail?.admission_decision ?? "").toUpperCase();
+                const obsType = String(detail?.observation_type ?? entry.event_type);
+                return (
+                  <li key={i} className="flex items-center gap-3 px-3 py-2">
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px]"
+                      style={{
+                        backgroundColor: `${OUTCOME_COLOR[admission] ?? "var(--munin-muted)"}18`,
+                        color: OUTCOME_COLOR[admission] ?? "var(--munin-muted)",
+                      }}
+                    >
+                      {admission || obsType}
+                    </span>
+                    <span className="min-w-0 truncate font-mono text-[10px] text-[var(--munin-text)]">
+                      {entry.content_preview}
+                    </span>
+                    <span className="shrink-0 font-mono text-[9px] text-[var(--munin-muted)]">
+                      {fmtDateTime(entry.timestamp).slice(11, 19)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </Panel>
+
+        {/* M12 — Capture Events */}
+        <Panel
+          title="Capture Events"
+          subtitle="Agent adapter activity"
+          right={<span className="font-mono text-[9px] text-[var(--munin-muted)]">LATEST {Math.min(activity.captures.length, 10)}</span>}
+          className="min-h-[260px] xl:col-span-6"
+          bodyClassName="overflow-hidden"
+        >
+          {activity.captures.length === 0 ? (
+            <EmptyState title="NO CAPTURE EVENTS" detail="Capture events are created by agent session adapters." />
+          ) : (
+            <ol className="divide-y divide-[var(--munin-border)]">
+              {activity.captures.slice(0, 10).map((event) => (
+                <li key={event.id} className="flex items-center gap-3 px-3 py-2">
+                  <span className="shrink-0 font-mono text-[9px] text-[var(--munin-cyan)]">{event.source}</span>
+                  <span className="shrink-0 font-mono text-[9px] text-[var(--munin-orange)]">{event.event_type}</span>
+                  <span className="min-w-0 truncate font-mono text-[10px] text-[var(--munin-text)]">
+                    {event.content}
+                  </span>
+                  {event.memory_id && <span className="shrink-0 font-mono text-[9px] text-[var(--munin-green)]">STORED</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
       </div>
     </div>
   );

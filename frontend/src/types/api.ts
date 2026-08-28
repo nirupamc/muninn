@@ -19,6 +19,8 @@ export interface MemoryRead {
   user_id: string | null;
   agent_id: string | null;
   content: string;
+  gist: string | null;
+  summary: string | null;
   memory_type: MemoryType;
   importance: number;
   confidence: number;
@@ -114,6 +116,7 @@ export interface ContextRequest {
   memory_types?: MemoryType[] | null;
   include_superseded?: boolean;
   as_of?: string | null;
+  retrieval_mode?: string | null;
 }
 
 export interface ContextMemoryUsed {
@@ -129,6 +132,8 @@ export interface ContextMemoryUsed {
   final_score: number;
   estimated_tokens: number;
   reason_codes: string[];
+  representation_level?: string | null;
+  selection_reason?: string | null;
 }
 
 export interface ContextResponse {
@@ -286,4 +291,141 @@ export interface AdapterHealthRead {
   last_check: string;
   error: string | null;
   metadata: Record<string, unknown> | null;
+}
+
+// M13 — Memory Debugger types
+
+export interface DebugMemoryIdentity {
+  memory_id: string;
+  project_id: string | null;
+  namespace: string;
+  memory_type: string;
+  status: string;
+  importance: number;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+  valid_from: string | null;
+  valid_until: string | null;
+}
+
+export interface DebugRepresentations {
+  l0_gist: string | null;
+  l1_summary: string | null;
+  l2_content: string;
+  l0_token_cost: number;
+  l1_token_cost: number;
+  l2_token_cost: number;
+  available_levels: string[];
+}
+
+export interface DebugProvenance {
+  agent_host: string | null;
+  model: string | null;
+  session_id: string | null;
+  observation_type: string | null;
+  observation_id: string | null;
+  capture_event_id: string | null;
+  source: string | null;
+  source_event_id: string | null;
+  timestamp: string | null;
+}
+
+export interface DebugAdmission {
+  decision: string;
+  admission_score: number;
+  importance: number | null;
+  confidence: number | null;
+  future_utility: number | null;
+  stability: number | null;
+  specificity: number | null;
+  explicitness: number | null;
+  triviality: number | null;
+  reason_codes: string[];
+  provider: string | null;
+  model_name: string | null;
+  created_at: string | null;
+}
+
+export interface DebugDedup {
+  relationship: string;
+  matched_memory_id: string | null;
+  relationship_confidence: number | null;
+  similarity_score: number | null;
+  reason_codes: string[];
+  created_new_memory: boolean;
+}
+
+export interface DebugReinforcement {
+  source_event_id: string;
+  candidate_content: string;
+  relationship_confidence: number;
+  created_at: string;
+}
+
+export interface DebugTemporal {
+  relationship: string;
+  matched_memory_id: string | null;
+  created_memory_id: string | null;
+  relationship_confidence: number | null;
+  similarity_score: number | null;
+  old_status: string | null;
+  new_old_status: string | null;
+  old_valid_until_before: string | null;
+  old_valid_until_after: string | null;
+  new_valid_from: string | null;
+  reason_codes: string[];
+}
+
+export interface DebugSourceEvent {
+  capture_event_id: string;
+  source: string;
+  event_type: string;
+  agent_id: string | null;
+  session_id: string | null;
+  observation_type: string | null;
+  observation_id: string | null;
+  content_preview: string;
+  admission_decision: string | null;
+  occurred_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface DebugMemoryView {
+  identity: DebugMemoryIdentity;
+  representations: DebugRepresentations;
+  provenance: DebugProvenance;
+  admission: DebugAdmission | null;
+  dedup: DebugDedup | null;
+  reinforcements: DebugReinforcement[];
+  reinforcement_count: number;
+  temporal: DebugTemporal[];
+  source_events: DebugSourceEvent[];
+}
+
+export interface DebugObservationView {
+  capture_event_id: string;
+  source: string;
+  event_type: string;
+  namespace: string;
+  agent_id: string | null;
+  session_id: string | null;
+  observation_type: string | null;
+  observation_id: string | null;
+  content_preview: string;
+  admission_decision: string | null;
+  memory_id: string | null;
+  occurred_at: string | null;
+  captured_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface DebugTimelineEntry {
+  timestamp: string;
+  event_type: string;
+  source: string;
+  namespace: string | null;
+  memory_id: string | null;
+  content_preview: string;
+  details: Record<string, unknown>;
 }

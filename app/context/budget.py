@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.context.models import ScoredCandidate, SelectedMemory, SkipReason
+from app.context.models import (
+    ContextConfig,
+    ScoredCandidate,
+    SelectedMemory,
+    SkipReason,
+)
 from app.context.tokenization.base import TokenEstimator
 
 
@@ -32,12 +37,19 @@ def select_within_budget(
     token_budget: int,
     estimator: TokenEstimator,
     header: str = CONTEXT_HEADER,
+    hierarchical: bool = False,
 ) -> tuple[list[SelectedMemory], int, bool, dict[str, list[str]]]:
     """
     Select complete memories that fit within the token budget.
 
-    Prefers fewer complete memories over truncating content mid-fact.
+    When hierarchical=False (default), uses full L2 content — original behavior.
+    When hierarchical=True, uses M10 representation selection to choose
+    the best representation level (L0/L1/L2) for each memory based on
+    remaining budget and importance.
     """
+    from app.memory.representations.models import ContextState, RepresentationLevel
+    from app.memory.representations.service import RepresentationService
+
     skipped: dict[str, list[str]] = {}
     selected: list[SelectedMemory] = []
     header_tokens = estimator.count(header)
@@ -53,19 +65,71 @@ def select_within_budget(
             truncated = True
             continue
 
-        line = format_memory_line(candidate.memory.content)
-        line_tokens = estimator.count(line)
+        # M10: Hierarchical representation selection
+        if hierarchical:
+            context_state = ContextState(
+                token_budget=token_budget,
+                remaining_budget=token_budget - used_tokens,
+                memories_selected=len(selected),
+                max_memories=max_memories,
+                query="",  # Not needed for current selection logic
+            )
+            selection = RepresentationService.select_representation(
+                memory=candidate.memory,
+                context_state=context_state,
+                estimator=estimator,
+            )
+            line = selection.text
+            line_tokens = selection.token_cost
+            representation_level = selection.level
+            selection_reason = selection.selection_reason
+        else:
+            line = format_memory_line(candidate.memory.content)
+            line_tokens = estimator.count(line)
+            representation_level = RepresentationLevel.L2_FULL
+            selection_reason = "flat_l2"
 
         if used_tokens + line_tokens > token_budget:
-            skipped.setdefault(candidate.memory.id, []).append(SkipReason.OUT_OF_BUDGET.value)
-            truncated = True
-            continue
+            # M10: If full content doesn't fit, try a smaller representation
+            if hierarchical and candidate.memory.gist:
+                from app.memory.representations.models import RepresentationLevel
+                l0_line = format_memory_line(candidate.memory.gist)
+                l0_tokens = estimator.count(l0_line)
+                if used_tokens + l0_tokens <= token_budget:
+                    line = l0_line
+                    line_tokens = l0_tokens
+                    representation_level = RepresentationLevel.L0_GIST
+                    selection_reason = "downgraded_to_l0_for_budget"
+                else:
+                    skipped.setdefault(candidate.memory.id, []).append(SkipReason.OUT_OF_BUDGET.value)
+                    truncated = True
+                    continue
+            elif hierarchical and candidate.memory.summary:
+                from app.memory.representations.models import RepresentationLevel
+                l1_line = format_memory_line(candidate.memory.summary)
+                l1_tokens = estimator.count(l1_line)
+                if used_tokens + l1_tokens <= token_budget:
+                    line = l1_line
+                    line_tokens = l1_tokens
+                    representation_level = RepresentationLevel.L1_SUMMARY
+                    selection_reason = "downgraded_to_l1_for_budget"
+                else:
+                    skipped.setdefault(candidate.memory.id, []).append(SkipReason.OUT_OF_BUDGET.value)
+                    truncated = True
+                    continue
+            else:
+                skipped.setdefault(candidate.memory.id, []).append(SkipReason.OUT_OF_BUDGET.value)
+                truncated = True
+                continue
+
+        # Build the display content for the selected representation
+        display_content = line[2:] if line.startswith("- ") else line
 
         selected.append(
             SelectedMemory(
                 memory_id=candidate.memory.id,
                 memory_type=candidate.memory.memory_type,
-                content=candidate.memory.content,
+                content=display_content,
                 semantic_score=candidate.semantic_score,
                 importance=candidate.importance,
                 confidence=candidate.confidence,
@@ -75,6 +139,8 @@ def select_within_budget(
                 final_score=candidate.final_score,
                 estimated_tokens=line_tokens,
                 reason_codes=list(candidate.reason_codes),
+                representation_level=representation_level or RepresentationLevel.L2_FULL,
+                selection_reason=selection_reason,
             )
         )
         used_tokens += line_tokens
